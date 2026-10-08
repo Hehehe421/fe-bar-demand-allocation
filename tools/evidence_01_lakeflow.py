@@ -16,7 +16,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
 from databricks.sdk import WorkspaceClient  # noqa: E402
 
-from tools.dbsql import sql, table  # noqa: E402
+from tools.dbsql import table  # noqa: E402
 
 PROFILE = "vm-summer-classic"
 HOST = "https://fevm-stable-classic-pqjg18.cloud.databricks.com"
