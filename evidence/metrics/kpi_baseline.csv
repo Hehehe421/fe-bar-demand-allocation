@@ -1,0 +1,27 @@
+kpi,value,unit,basis,measured_at_utc,source
+retailer_fill_rate_pct,96.2647,pct,shipped units / requested units across all PO lines in gold.fct_orders_fulfillment,2026-10-08 22:22:38,toy_demand_allocation.gold
+retailer_fill_rate_confirmed_basis_pct,99.1633,pct,"shipped units / confirmed units; reported for comparison, flatters performance",2026-10-08 22:22:38,toy_demand_allocation.gold
+order_acceptance_pct,97.077,pct,confirmed units / requested units; falls when supply cannot cover demand,2026-10-08 22:22:38,toy_demand_allocation.gold
+otif_pct,86.1441,pct,"PO lines both on-time (within 2-day grace) and in-full, as share of all lines",2026-10-08 22:22:38,toy_demand_allocation.gold
+on_time_pct,92.6646,pct,PO lines shipped within the 2-day grace,2026-10-08 22:22:38,toy_demand_allocation.gold
+in_full_pct,92.9652,pct,PO lines shipped complete vs requested,2026-10-08 22:22:38,toy_demand_allocation.gold
+stockout_weeks,74789.0,count,SKU x retailer x DC x week cells where demand exceeded units served,2026-10-08 22:22:38,toy_demand_allocation.gold
+stockout_week_incidence_pct,15.5751,pct,stockout weeks as share of active SKU x retailer x DC weeks,2026-10-08 22:22:38,toy_demand_allocation.gold
+lost_units,585575.0,units,"true_demand_units minus pos_units, summed over all active cells",2026-10-08 22:22:38,toy_demand_allocation.gold
+lost_units_pct_of_demand,5.8504,pct,lost units as share of unconstrained consumer demand,2026-10-08 22:22:38,toy_demand_allocation.gold
+lost_revenue_usd,5505413.36,usd,lost units valued at wholesale price,2026-10-08 22:22:38,toy_demand_allocation.gold
+compliance_chargeback_usd,1260717.82,usd,retailer compliance chargebacks on non-compliant PO lines,2026-10-08 22:22:38,toy_demand_allocation.gold
+compliance_chargeback_pct_of_invoiced,1.2416,pct,chargeback $ / invoiced wholesale $,2026-10-08 22:22:38,toy_demand_allocation.gold
+markdown_cleared_units,2063198.0,units,units liquidated at close-out in gold.fct_markdown,2026-10-08 22:22:38,toy_demand_allocation.gold
+markdown_loss_usd,7940809.19,usd,wholesale margin forgone: cleared units x (wholesale - clearance price),2026-10-08 22:22:38,toy_demand_allocation.gold
+markdown_loss_pct_of_invoiced,7.8204,pct,markdown loss / invoiced wholesale $,2026-10-08 22:22:38,toy_demand_allocation.gold
+weeks_of_supply,17.02,weeks,latest on-hand units / mean weekly POS units over the last 13 weeks,2026-10-08 22:22:38,toy_demand_allocation.gold
+inventory_turns_annual,3.06,turns,52 / weeks of supply,2026-10-08 22:22:38,toy_demand_allocation.gold
+on_hand_at_cost_usd,16046011.24,usd,latest on-hand valued at landed cost from silver.product_master,2026-10-08 22:22:38,toy_demand_allocation.gold
+invoiced_wholesale_usd,101539155.5,usd,"shipped units x wholesale price, whole 3-year history",2026-10-08 22:22:38,toy_demand_allocation.gold
+po_lines,255147.0,count,PO lines in gold.fct_orders_fulfillment,2026-10-08 22:22:38,toy_demand_allocation.gold
+air_expedite_units,1085487.0,units,units air-freighted to chase a detected demand surge,2026-10-08 22:22:38,toy_demand_allocation.gold
+air_freight_usd,2116699.65,usd,air freight spend on expedites,2026-10-08 22:22:38,toy_demand_allocation.gold
+air_freight_pct_of_invoiced,2.0846,pct,air freight spend / invoiced wholesale $,2026-10-08 22:22:38,toy_demand_allocation.gold
+air_freight_usd_per_unit,1.95,usd_per_unit,air freight unit rate,2026-10-08 22:22:38,toy_demand_allocation.gold
+air_vs_ocean_freight_premium_x,6.9643,ratio,air freight unit rate / ocean freight unit rate,2026-10-08 22:22:38,toy_demand_allocation.gold
