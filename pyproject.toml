@@ -1,0 +1,23 @@
+[project]
+name = "fe-bar-demand-allocation"
+version = "0.1.0"
+description = "Governed demand forecasting and constrained allocation loop for a licensed toy and collectibles manufacturer (synthetic data)."
+requires-python = ">=3.12"
+dependencies = [
+    "databricks-sdk>=0.40.0",
+    "pandas>=2.2",
+    "numpy>=1.26",
+    "pyarrow>=16.0",
+    "reportlab>=4.2",
+    "pillow>=10.3",
+    "nbformat>=5.10",
+    "psycopg[binary]>=3.2",
+    "requests>=2.32",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
