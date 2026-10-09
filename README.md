@@ -1,10 +1,11 @@
 # Demand forecasting and constrained allocation for a licensed toy manufacturer
 
-> **Build status: 2 of 6 stages complete.** Stages A (Lakeflow) and B (Unity
-> Catalog) are built, executed and evidenced. Stages C1, C2, D, E and F are
-> **not yet built** and nothing in this repository claims otherwise — there are
-> no placeholder modules, no empty notebooks and no asserted results for
-> unbuilt stages. See [Build status](#build-status) for exactly what exists.
+> **Build status: 4 of 6 stages complete.** Stages A (Lakeflow), B (Unity
+> Catalog), C1 (classical ML) and C2 (GenAI agent) are built, executed and
+> evidenced. Stages D (Lakebase), E (Genie) and F (the app) are **not yet
+> built** and nothing in this repository claims otherwise — there are no
+> placeholder modules, no empty notebooks and no asserted results for unbuilt
+> stages. See [Build status](#build-status) for exactly what exists.
 > **All data is synthetic.**
 
 ## The problem
@@ -76,8 +77,8 @@ landing files -> bronze/silver/gold -> features -> forecast -> risk table
 |---|---|---|
 | **A — Lakeflow** | Seeded generator lands 8 sources into `bronze.landing`; serverless declarative pipeline builds 6 Bronze streaming tables, 6 Silver materialized views, 8 Gold materialized views, with 29 data-quality expectations | **Built** |
 | **B — Unity Catalog** | Comments on every Gold table and column; tags; grants for 3 personas + app identity; row filter on retailer; column mask on cost/margin; 3 metric views; lineage | **Built** |
-| **C1 — Classical ML** | Feature engineering, ≥5 algorithms across ≥3 families in one MLflow experiment, leaderboard, UC registration with `@champion`/`@challenger`, 13-week batch scoring, `gold.fct_stockout_risk` | Not built |
-| **C2 — GenAI** | MLflow `ResponsesAgent` on Claude via FMAPI with 5 real tools, tracing, prompt registry, eval with built-in + custom scorers, Model Serving endpoint | Not built |
+| **C1 — Classical ML** | Feature Engineering table consumed via `FeatureLookup`, 7 candidates across 6 families in one MLflow experiment, leaderboard, UC registration with `@champion`/`@challenger`, 13-week forward scoring, `gold.fct_stockout_risk` | **Built** |
+| **C2 — GenAI** | MLflow `ResponsesAgent` on Claude via FMAPI with 5 real tools, end-to-end tracing, versioned prompt, 22-row eval with built-in judges + a custom mechanical scorer, registered in UC and deployed to a live Model Serving endpoint | **Built** |
 | **D — Lakebase** | New instance, synced tables for the app read path, native OLTP `allocation_decisions` table, sync back into UC | Not built |
 | **E — Genie** | Space over Gold + metric views with instructions, synonyms and curated example SQL; ≥10 questions via the Conversation API | Not built |
 | **F — Databricks App** | "Allocation Command Center": KPI header, at-risk worklist, SKU detail, agent panel, accept/override writing to Lakebase, embedded Genie | Not built |
@@ -95,6 +96,10 @@ timestamp, the workspace, and the fully-qualified UC paths it touched.
 | B | [`evidence/02_unity_catalog.md`](evidence/02_unity_catalog.md) | `SHOW GRANTS` per object; table and column tags from `information_schema`; column-comment coverage; the policy DDL; **masked-vs-unmasked query results with the authenticated identity used for each**; metric-view queries with results; table- and column-level lineage rows |
 | B | [`notebooks/02_governance_and_baseline.ipynb`](notebooks/02_governance_and_baseline.ipynb) · [md export](notebooks/exports/02_governance_and_baseline.md) | The KPI baseline measured from Gold, including the loss breakdown by licence family and the ocean-vs-air freight comparison |
 | B | [`evidence/metrics/kpi_baseline.csv`](evidence/metrics/kpi_baseline.csv) | 26 KPIs, each with its value, unit and exact basis of measurement |
+| C1 | [`evidence/03_ml_forecast.md`](evidence/03_ml_forecast.md) | Leaderboard of 7 candidates across 6 families on one holdout; accuracy decomposed by licence family and horizon through the `mv_forecast_accuracy` metric view; the p90-method comparison; UC registry state with both aliases resolved; the risk table tiered, with the constrained-allocation contention |
+| C1 | [`notebooks/03_demand_forecast.ipynb`](notebooks/03_demand_forecast.ipynb) · [md export](notebooks/exports/03_demand_forecast.md) · [`evidence/metrics/forecast_leaderboard.csv`](evidence/metrics/forecast_leaderboard.csv) | The full sweep as executed, including the three modelling errors found and corrected |
+| C2 | [`evidence/04_genai_agent.md`](evidence/04_genai_agent.md) | Runtime-resolved FMAPI endpoint; all five tools invoked against real UC objects; two full agent briefs verbatim; span tree with timings and token counts; 22-row evaluation with per-row scores and the failures in full; UC registration; **a real request/response against the live serving endpoint** |
+| C2 | [`notebooks/04_allocation_agent.ipynb`](notebooks/04_allocation_agent.ipynb) · [md export](notebooks/exports/04_allocation_agent.md) · [`evidence/metrics/genai_eval_results.csv`](evidence/metrics/genai_eval_results.csv) | The agent run end to end, including the prompt-registry feature gate and the two deployment failures |
 
 Two results in there are worth calling out because they were produced rather
 than asserted:
@@ -107,6 +112,17 @@ than asserted:
   `sku_resolves_to_master` dropped exactly the 721 orphan SKU references the
   generator injected, and `pos_units_non_negative` dropped 992 of 997 injected
   negatives (the other 5 were in rows already removed as duplicates).
+- **The forecast is good where demand is predictable and bad where it is not,
+  and the evidence says which.** 20.5% WAPE on `EVERGREEN` against 110.2% on
+  `SOCIAL_TREND`, whose p90 interval covers only 74.7% of actuals against a 90%
+  target. Since that p90 drives the risk table, the risk table understates
+  exposure on exactly the trend items that matter most — recorded as a
+  limitation rather than averaged away into a single portfolio number.
+- **The agent is correct more often than it is grounded.** `Correctness` passes
+  20 of 22 rows, but the custom mechanical scorer finds only 74.5% of the
+  numbers in its answers trace back to actual tool output, with 5 of 22 answers
+  fully grounded. Two LLM judges and one mechanical check disagree, and the
+  mechanical one is right — which is the whole argument for having it.
 
 ## How to run it
 
@@ -194,18 +210,30 @@ revenue claim and no founding story.
 Honest accounting, because a submission that overclaims is worse than one that
 is short:
 
-**Built, executed, evidenced** — Stage A and Stage B, as indexed above. The
-pipeline ran to `COMPLETED`, the expectations produced real counts, the
-policies were verified by authenticating as each persona, and the baseline was
-measured from the Gold layer.
+**Built, executed, evidenced** — Stages A, B, C1 and C2, as indexed above. The
+pipeline ran to `COMPLETED`, the expectations produced real counts, the policies
+were verified by authenticating as each persona, the baseline was measured from
+the Gold layer, the sweep registered a champion and a challenger in Unity
+Catalog, and the agent is deployed to a Model Serving endpoint that answers
+real requests.
 
-**Not built** — Stages C1, C2, D, E and F, and the business deck. There are no
-stub modules, empty notebooks, skeleton dashboards or asserted results for any
-of them. `src/features/`, `src/agent/`, `src/genie/`, `src/lakebase/`,
-`src/serving/`, `app/` and `tests/` are empty directories, and
-`gold.mv_forecast_accuracy` is deliberately deferred to Stage C1 because its
-source table does not exist yet — recorded as `DEFERRED` in the Stage B run
-output rather than silently skipped.
+**Two capabilities substituted, both documented, neither skipped:**
+
+- **MLflow prompt registry** is disabled at organisation level on this workspace
+  (`FEATURE_DISABLED: CreatePrompt`) on both the Unity Catalog and workspace
+  registry paths. Implemented instead as a governed, content-addressed,
+  version-addressable prompt store in Unity Catalog
+  (`src/agent/prompt_store.py`). The agent tries MLflow first and records on
+  every trace which path answered. Verbatim errors are in
+  `evidence/04_genai_agent.md`.
+- **Lakeflow Connect from SQL Server** is the production ingest path and is
+  stated as such; this build ingests committed synthetic flat files via Auto
+  Loader instead. No SQL Server connector was run.
+
+**Not built** — Stages D (Lakebase), E (Genie) and F (the app), and the business
+deck. There are no stub modules, empty notebooks, skeleton dashboards or
+asserted results for any of them. `src/genie/`, `src/lakebase/`,
+`src/serving/`, `app/` and `tests/` are empty directories.
 
 `docs/PROVENANCE.md` records the conversation ID, every resource this build
 created, and confirmation that nothing on the workspace's do-not-touch list was

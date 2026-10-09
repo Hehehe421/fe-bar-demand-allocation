@@ -21,10 +21,16 @@ target-version = "py312"
 # Injected by the Databricks runtime inside notebooks and pipeline files.
 # Declaring them keeps F821 meaningful for genuine typos rather than
 # suppressing the rule file-wide with a per-file-ignore.
-builtins = ["spark", "dbutils", "display", "sc", "sqlContext"]
+builtins = ["spark", "dbutils", "display", "sc", "sqlContext", "get_ipython"]
 # .ipynb files here are generated artifacts committed for their outputs;
 # the percent-format .py sources next to them are the linted originals.
 extend-exclude = ["*.ipynb"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+# Notebook cells import after the notebook-scoped %pip install and the Python
+# restart that it requires, so module-level imports legitimately do not sit at
+# the top of the file.
+"notebooks/*.py" = ["E402"]
