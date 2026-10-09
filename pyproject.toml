@@ -18,6 +18,13 @@ dependencies = [
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+# Injected by the Databricks runtime inside notebooks and pipeline files.
+# Declaring them keeps F821 meaningful for genuine typos rather than
+# suppressing the rule file-wide with a per-file-ignore.
+builtins = ["spark", "dbutils", "display", "sc", "sqlContext"]
+# .ipynb files here are generated artifacts committed for their outputs;
+# the percent-format .py sources next to them are the linted originals.
+extend-exclude = ["*.ipynb"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]

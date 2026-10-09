@@ -14,7 +14,7 @@ from pyspark import pipelines as dp
 from pyspark.sql import Window
 from pyspark.sql import functions as F
 
-CATALOG = spark.conf.get("target_catalog")  # noqa: F821
+CATALOG = spark.conf.get("target_catalog")
 
 #: Readable labels and contractual fill-rate commitments per retailer. The
 #: commitment drives allocation priority when supply is constrained, so it
@@ -44,7 +44,7 @@ DCS = [
     "lifecycle stage, case pack, cost and margin. SYNTHETIC DATA.",
 )
 def dim_product():
-    return spark.read.table(f"{CATALOG}.silver.product_master").select(  # noqa: F821
+    return spark.read.table(f"{CATALOG}.silver.product_master").select(
         "sku_id",
         "product_name",
         "brand",
@@ -71,16 +71,16 @@ def dim_product():
     "SYNTHETIC DATA.",
 )
 def dim_retailer_dc():
-    retailers = spark.createDataFrame(  # noqa: F821
+    retailers = spark.createDataFrame(
         RETAILERS, "retailer_code STRING, retailer_label STRING, channel STRING, "
         "contractual_fill_commitment DOUBLE"
     )
-    dcs = spark.createDataFrame(  # noqa: F821
+    dcs = spark.createDataFrame(
         DCS, "dc_code STRING, dc_label STRING, dc_region STRING"
     )
     # only emit the combinations that actually ship
     observed = (
-        spark.read.table(f"{CATALOG}.silver.pos_weekly")  # noqa: F821
+        spark.read.table(f"{CATALOG}.silver.pos_weekly")
         .select("retailer_code", "dc_code")
         .distinct()
     )
@@ -114,8 +114,8 @@ def dim_retailer_dc():
     "sales. SYNTHETIC DATA.",
 )
 def fct_demand_weekly():
-    pos = spark.read.table(f"{CATALOG}.silver.pos_weekly")  # noqa: F821
-    prod = spark.read.table(f"{CATALOG}.gold.dim_product").select(  # noqa: F821
+    pos = spark.read.table(f"{CATALOG}.silver.pos_weekly")
+    prod = spark.read.table(f"{CATALOG}.gold.dim_product").select(
         "sku_id", "brand", "license_family", "lifecycle_stage", "wholesale_price_usd"
     )
     return (
@@ -166,8 +166,8 @@ def fct_demand_weekly():
     "chargeback. Basis for the fill-rate and OTIF metric views. SYNTHETIC DATA.",
 )
 def fct_orders_fulfillment():
-    orders = spark.read.table(f"{CATALOG}.silver.orders")  # noqa: F821
-    prod = spark.read.table(f"{CATALOG}.gold.dim_product").select(  # noqa: F821
+    orders = spark.read.table(f"{CATALOG}.silver.orders")
+    prod = spark.read.table(f"{CATALOG}.gold.dim_product").select(
         "sku_id", "brand", "license_family", "lifecycle_stage", "unit_cost_usd"
     )
     return (
@@ -210,7 +210,7 @@ def fct_orders_fulfillment():
     "SYNTHETIC DATA.",
 )
 def fct_inbound_eta():
-    asn = spark.read.table(f"{CATALOG}.silver.inbound_shipments")  # noqa: F821
+    asn = spark.read.table(f"{CATALOG}.silver.inbound_shipments")
     return asn.select(
         "asn_id",
         "sku_id",
@@ -240,7 +240,7 @@ def fct_inbound_eta():
     "full daily history. The denominator of weeks-of-supply. SYNTHETIC DATA.",
 )
 def fct_inventory_position():
-    inv = spark.read.table(f"{CATALOG}.silver.inventory_snapshots")  # noqa: F821
+    inv = spark.read.table(f"{CATALOG}.silver.inventory_snapshots")
     # Flag the newest snapshot with a window rather than collecting the max
     # back to the driver: SDP rejects DataFrame.collect inside a decorated
     # function because it breaks the declarative execution model.
@@ -271,8 +271,8 @@ def fct_inventory_position():
     "committed data rather than inferred from a snapshot. SYNTHETIC DATA.",
 )
 def fct_markdown():
-    md = spark.read.table(f"{CATALOG}.silver.markdown_clearance")  # noqa: F821
-    prod = spark.read.table(f"{CATALOG}.gold.dim_product").select(  # noqa: F821
+    md = spark.read.table(f"{CATALOG}.silver.markdown_clearance")
+    prod = spark.read.table(f"{CATALOG}.gold.dim_product").select(
         "sku_id", "brand", "license_family", "lifecycle_stage"
     )
     return md.join(F.broadcast(prod), "sku_id", "left").select(
@@ -303,8 +303,8 @@ def fct_markdown():
     "query per page load. SYNTHETIC DATA.",
 )
 def agg_fill_rate_summary():
-    f = spark.read.table(f"{CATALOG}.gold.fct_orders_fulfillment")  # noqa: F821
-    dim = spark.read.table(f"{CATALOG}.gold.dim_retailer_dc").select(  # noqa: F821
+    f = spark.read.table(f"{CATALOG}.gold.fct_orders_fulfillment")
+    dim = spark.read.table(f"{CATALOG}.gold.dim_retailer_dc").select(
         "retailer_code", "retailer_label", "contractual_fill_commitment"
     ).distinct()
     agg = f.groupBy("retailer_code", "requested_week_end_date").agg(

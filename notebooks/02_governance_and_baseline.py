@@ -26,10 +26,10 @@ import config  # noqa: E402
 
 C = config.CATALOG
 print("catalog:", C)
-print("current_user:", spark.sql("SELECT current_user()").collect()[0][0])  # noqa: F821
+print("current_user:", spark.sql("SELECT current_user()").collect()[0][0])
 
 # demonstrate the mask is active for this identity
-spark.sql(  # noqa: F821
+spark.sql(
     f"SELECT sku_id, unit_cost_usd, gross_margin_pct FROM {C}.gold.dim_product LIMIT 3"
 ).show()
 print("^ cost and margin are NULL here: the Stage B column mask is in force for")
@@ -45,7 +45,7 @@ print("  this identity. Cost-based measures below read silver.product_master.")
 # 99% on a confirmed basis and 96% on a requested basis describe the same weeks.
 
 # %%
-service = spark.sql(f"""                                                   -- noqa: F821
+service = spark.sql(f"""
 SELECT
   SUM(requested_units)                                              AS requested_units,
   SUM(confirmed_units)                                              AS confirmed_units,
@@ -72,7 +72,7 @@ service.show(vertical=True, truncate=False)
 # commitment and actual is what a planner is actually judged on.
 
 # %%
-spark.sql(f"""                                                             -- noqa: F821
+spark.sql(f"""
 SELECT
   f.retailer_code,
   d.contractual_fill_commitment * 100                               AS commitment_pct,
@@ -96,7 +96,7 @@ ORDER BY f.retailer_code
 # forecast is ultimately trying to reduce.
 
 # %%
-loss = spark.sql(f"""                                                      -- noqa: F821
+loss = spark.sql(f"""
 SELECT
   COUNT(*)                                                          AS active_sku_retailer_dc_weeks,
   SUM(CASE WHEN is_stockout_week THEN 1 ELSE 0 END)                 AS stockout_weeks,
@@ -119,7 +119,7 @@ loss.show(vertical=True, truncate=False)
 # 9–16 week ocean replenishment ordered off a trailing average.
 
 # %%
-spark.sql(f"""                                                             -- noqa: F821
+spark.sql(f"""
 SELECT
   license_family,
   COUNT(*)                                                           AS sku_weeks,
@@ -141,7 +141,7 @@ ORDER BY lost_revenue_usd DESC
 # direct, measurable cost of not having seen the spike coming.
 
 # %%
-freight = spark.sql(f"""                                                   -- noqa: F821
+freight = spark.sql(f"""
 SELECT
   transport_mode,
   COUNT(*)                                        AS shipments,
@@ -160,7 +160,7 @@ freight.show(truncate=False)
 # from this identity.
 
 # %%
-md = spark.sql(f"""                                                        -- noqa: F821
+md = spark.sql(f"""
 SELECT
   SUM(cleared_units)                              AS markdown_cleared_units,
   ROUND(SUM(markdown_loss_usd), 2)                AS markdown_loss_usd
@@ -168,7 +168,7 @@ FROM {C}.gold.fct_markdown
 """)
 md.show(truncate=False)
 
-inv = spark.sql(f"""                                                       -- noqa: F821
+inv = spark.sql(f"""
 WITH latest AS (
   SELECT i.sku_id, i.dc_code, i.on_hand_units, i.in_transit_units
   FROM {C}.gold.fct_inventory_position i

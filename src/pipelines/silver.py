@@ -28,7 +28,7 @@ from pyspark import pipelines as dp
 from pyspark.sql import Window
 from pyspark.sql import functions as F
 
-CATALOG = spark.conf.get("target_catalog")  # noqa: F821
+CATALOG = spark.conf.get("target_catalog")
 
 #: Retailers that report in cases rather than eaches.
 CASE_REPORTING = ["ETAIL_C"]
@@ -57,7 +57,7 @@ CASE_REPORTING = ["ETAIL_C"]
     }
 )
 def silver_product_master():
-    df = spark.read.table(f"{CATALOG}.bronze.product_master")  # noqa: F821
+    df = spark.read.table(f"{CATALOG}.bronze.product_master")
     w = Window.partitionBy("sku_id").orderBy(F.col("_ingested_at").desc())
     return (
         df.withColumn("_rn", F.row_number().over(w))
@@ -94,8 +94,8 @@ def silver_product_master():
     }
 )
 def silver_pos_weekly():
-    pos = spark.read.table(f"{CATALOG}.bronze.pos_weekly")  # noqa: F821
-    master = spark.read.table(f"{CATALOG}.bronze.product_master").select(  # noqa: F821
+    pos = spark.read.table(f"{CATALOG}.bronze.pos_weekly")
+    master = spark.read.table(f"{CATALOG}.bronze.product_master").select(
         "sku_id", "case_pack"
     ).dropDuplicates(["sku_id"])
 
@@ -151,7 +151,7 @@ def silver_pos_weekly():
     }
 )
 def silver_orders():
-    df = spark.read.table(f"{CATALOG}.bronze.orders")  # noqa: F821
+    df = spark.read.table(f"{CATALOG}.bronze.orders")
     w = Window.partitionBy("po_line_id").orderBy(F.col("_ingested_at").desc())
     df = df.withColumn("_rn", F.row_number().over(w)).filter(F.col("_rn") == 1).drop("_rn")
 
@@ -189,7 +189,7 @@ def silver_orders():
     }
 )
 def silver_inventory_snapshots():
-    df = spark.read.table(f"{CATALOG}.bronze.inventory_snapshots")  # noqa: F821
+    df = spark.read.table(f"{CATALOG}.bronze.inventory_snapshots")
     w = Window.partitionBy("sku_id", "dc_code", "snapshot_date").orderBy(
         F.col("_ingested_at").desc()
     )
@@ -220,7 +220,7 @@ def silver_inventory_snapshots():
     }
 )
 def silver_inbound_shipments():
-    df = spark.read.table(f"{CATALOG}.bronze.inbound_shipments")  # noqa: F821
+    df = spark.read.table(f"{CATALOG}.bronze.inbound_shipments")
     w = Window.partitionBy("asn_id").orderBy(F.col("_ingested_at").desc())
     df = df.withColumn("_rn", F.row_number().over(w)).filter(F.col("_rn") == 1).drop("_rn")
     return (
@@ -253,7 +253,7 @@ def silver_inbound_shipments():
     {"clearance_below_wholesale": "clearance_price_usd <= wholesale_price_usd"}
 )
 def silver_markdown_clearance():
-    df = spark.read.table(f"{CATALOG}.bronze.markdown_clearance")  # noqa: F821
+    df = spark.read.table(f"{CATALOG}.bronze.markdown_clearance")
     w = Window.partitionBy("clearance_id").orderBy(F.col("_ingested_at").desc())
     return (
         df.withColumn("_rn", F.row_number().over(w))

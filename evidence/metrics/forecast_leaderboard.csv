@@ -1,0 +1,8 @@
+rank,algorithm,family,wape_pct,mape_nonzero_pct,bias_pct,rmse,pinball_p50,pinball_p90,p90_coverage_pct,train_seconds,run_id
+1,lightgbm,gradient_boosting,67.36,183.373,5.224,93.215,11.31,9.526,89.951,43.3,b538cea89e7c4c768c28da6650d8ed72
+2,xgboost,gradient_boosting,72.883,206.873,11.159,98.517,12.237,9.809,89.245,75.7,8ac9704203a8443aa19df6a888dc88ed
+3,random_forest,sklearn_ensemble,90.64,291.367,32.146,112.641,15.219,10.635,91.547,146.2,11b90f25c54543e8ac27ee22a6ca5e2a
+4,ridge_linear,linear,91.665,406.062,31.89,96.371,15.391,18.144,85.317,12.9,1890c13e7293446f81dd140bfac90dfb
+5,sklearn_hist_gbm,sklearn_boosting,92.993,259.888,26.633,270.228,15.614,11.324,90.762,26.1,2a5fc893c1334b06bce1352350d25e79
+6,seasonal_naive,baseline,95.342,269.2,20.241,119.124,16.008,16.477,89.629,0.6,558bf29ad98e44888a01fb1e152b9f9d
+7,trailing_mean_13,statistical,96.724,258.484,16.466,114.866,16.24,15.101,91.173,0.4,3d50b737a50a4ad28beb39006fed2a59

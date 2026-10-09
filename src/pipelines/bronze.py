@@ -19,9 +19,9 @@ with `schemaHints` binds by name and still pins the types that matter.
 from pyspark import pipelines as dp
 from pyspark.sql import functions as F
 
-CATALOG = spark.conf.get("target_catalog")  # noqa: F821
-LANDING = spark.conf.get("landing_path")  # noqa: F821
-META = spark.conf.get("schema_location_base")  # noqa: F821
+CATALOG = spark.conf.get("target_catalog")
+LANDING = spark.conf.get("landing_path")
+META = spark.conf.get("schema_location_base")
 
 #: Type hints per source. Everything not listed infers as STRING, which is the
 #: safe default for identifiers and codes.
@@ -70,7 +70,7 @@ CLUSTER_BY: dict[str, list[str]] = {
 def _ingest(source: str):
     """Auto Loader stream for one landing subdirectory."""
     return (
-        spark.readStream.format("cloudFiles")  # noqa: F821
+        spark.readStream.format("cloudFiles")
         .option("cloudFiles.format", "csv")
         .option("cloudFiles.schemaLocation", f"{META}/bronze_{source}")
         .option("cloudFiles.schemaHints", HINTS[source])
