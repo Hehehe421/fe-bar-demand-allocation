@@ -1,8 +1,39 @@
 # Continuation notes
 
-Handoff for resuming this build in a fresh session. Stages A and B are done;
-C1, C2, D, E, F and the deck are not. Read `README.md` for status and
-`docs/PROVENANCE.md` for every resource ID.
+Handoff for resuming this build in a fresh session. Stages A, B, C1 and C2 are
+done; D (Lakebase), E (Genie), F (the app) and the deck are not. Read
+`README.md` for status and `docs/PROVENANCE.md` for every resource ID.
+
+## What Stage D can rely on
+
+`gold.fct_stockout_risk` is built and is the spine: 3,006 at-risk SKU x retailer
+rows tiered CRITICAL / HIGH / MEDIUM / LOW, with `severity_score`,
+`units_at_risk`, `revenue_at_risk_usd` and `projected_stockout_week`. The app
+worklist sorts on `severity_score` and filters on `risk_tier`.
+`gold.fct_demand_forecast` holds 13 weeks of p50/p90 per series, and
+`gold.agg_fill_rate_summary` is already sized for the app's KPI header. The
+agent is live on serving endpoint `toy-allocation-agent` and the app's agent
+panel should call that rather than re-instantiating the agent.
+
+## Stage C2 additions worth knowing
+
+- MLflow 3 on this cluster needs a notebook-scoped `%pip install` plus
+  `dbutils.library.restartPython()`; a plain or `--target` install does not take
+  path precedence. Pin `pyopenssl>=24.2` alongside it or `log_model` dies with
+  `module 'lib' has no attribute 'GEN_EMAIL'`.
+- Declare `httpx` explicitly in `pip_requirements` for anything that serves the
+  `openai` client, or the endpoint deploys READY and fails every request.
+- Query a ResponsesAgent endpoint on the raw `/invocations` route with
+  `{"input": [...]}`. `WorkspaceClient.query()` wraps into legacy `{"inputs":
+  ...}` and is rejected.
+- The MLflow prompt registry is disabled org-wide; `src/agent/prompt_store.py`
+  is the UC-backed substitute. Inside Model Serving it falls back to the
+  source-file tier because the endpoint identity cannot reach the warehouse —
+  granting that service principal `SELECT` on `ml.prompt_versions` and `CAN USE`
+  on the warehouse would close it.
+- `mlflow.genai.scorers.Guidelines` requires a global `guidelines=` list and
+  raises a pydantic `ValidationError` without one, so it cannot read per-row
+  expectations.
 
 ## Live resources (verified 2026-10-08)
 
@@ -74,7 +105,7 @@ databricks workspace import-dir src \
   --overwrite --profile vm-summer-classic
 ```
 
-## Stage C1 — the immediate next task
+## Stage C1 — COMPLETE (kept for reference)
 
 Target: `notebooks/03_demand_forecast.py`, evidence `evidence/03_ml_forecast.md`.
 
@@ -111,15 +142,25 @@ for policies — and the row filter on retailer should be extended to
 `fct_stockout_risk`, since that is what the planner persona actually reads in
 the app.
 
-## Remaining stages after C1
+## Remaining stages
 
-C2 (agent: 5 real tools, tracing, prompt registry, ≥20-row eval with a custom
-numeric-grounding scorer, Model Serving endpoint), D (new Lakebase instance,
-synced tables, native OLTP `allocation_decisions`, sync back to UC), E (Genie
-space + ≥10 questions via the Conversation API, including one failure and the
-instruction change that fixed it), F (the app), then the deck as both `.pdf`
-and `.md`, `docs/TALK_TRACK.md`, `docs/ARCHITECTURE.md`,
-`docs/BUSINESS_CASE.md`, `databricks.yml`, and the §11 final checklist.
+**D — Lakebase.** New instance (`config.LAKEBASE_INSTANCE`), synced tables for
+the app read path (`config.SYNCED_TABLES` already maps the four), a native OLTP
+`allocation_decisions` table the app writes to, and a sync back into UC as
+`gold.fct_allocation_decisions` so the decision is auditable and answerable in
+Genie. Note: registering a Lakebase instance's online catalog in UC needs
+`CREATE CATALOG`, which the FEVM `lakebase` metastore grant conferred — that
+grant has a 5-day TTL from 2026-10-08, so it may need re-requesting.
 
-Also still owed: `tests/`, and the `evidence/metrics/genai_eval_results.csv`
-artifact.
+**E — Genie.** Space over the gold tables *and the metric views*, with
+instructions, column synonyms and curated example SQL for the hard joins, then
+≥10 questions through the Conversation API including at least one the space got
+wrong plus the instruction change that fixed it.
+
+**F — App.** "Allocation Command Center" reading from Lakebase, with the agent
+panel calling the live `toy-allocation-agent` endpoint and the accept/override
+writing back to Lakebase. Invoke the `dataviz` skill before any chart code.
+
+**Then** the deck as both `.pdf` and `.md`, `docs/TALK_TRACK.md`,
+`docs/ARCHITECTURE.md`, `docs/BUSINESS_CASE.md`, `databricks.yml`, `tests/`, and
+the §11 final checklist run literally.
