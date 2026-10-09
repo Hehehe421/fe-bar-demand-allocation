@@ -201,21 +201,49 @@ PROMPT_REGISTRY_NAME: Final[str] = fq("ml", "allocation_analyst_system_prompt")
 # Lakebase (Stage D)
 # --------------------------------------------------------------------------
 
-LAKEBASE_INSTANCE: Final[str] = "toy-demand-alloc-db"
-LAKEBASE_CAPACITY: Final[str] = "CU_1"
+# Lakebase is Autoscaling-only now; the Provisioned tier (CU_1..CU_8, the
+# `databricks database` CLI group) is retired and must not be created. These are
+# Autoscaling resource paths, managed with `databricks postgres`.
+LAKEBASE_PROJECT: Final[str] = "toy-demand-alloc"
+LAKEBASE_BRANCH: Final[str] = f"projects/{LAKEBASE_PROJECT}/branches/production"
+LAKEBASE_ENDPOINT: Final[str] = f"{LAKEBASE_BRANCH}/endpoints/primary"
 LAKEBASE_DATABASE: Final[str] = "databricks_postgres"
+LAKEBASE_DB_RESOURCE: Final[str] = f"{LAKEBASE_BRANCH}/databases/databricks-postgres"
+LAKEBASE_HOST: Final[str] = (
+    "ep-empty-butterfly-d2dihd0i.database.us-east-1.cloud.databricks.com"
+)
+#: Postgres schema the app owns and writes to.
 LAKEBASE_APP_SCHEMA: Final[str] = "allocation"
 
-#: UC catalog that fronts the Lakebase instance for synced tables.
+#: UC catalog that fronts the Lakebase database for synced tables.
 LAKEBASE_UC_CATALOG: Final[str] = "toy_demand_alloc_online"
+#: Postgres schema the synced tables land in.
+LAKEBASE_SYNC_SCHEMA: Final[str] = "public"
 
 #: Gold tables replicated into Lakebase for the app's low-latency read path.
-#: (keys are Lakebase table names, values are the UC gold sources)
+#: Keys are Lakebase table names, values are the UC sources.
+#:
+#: `product_lookup` and `fill_rate_summary` read from `svc_*` serving
+#: projections rather than from `dim_product` / `agg_fill_rate_summary`
+#: directly. Unity Catalog refuses to create an online copy of a table that
+#: carries a row filter or column mask -- "cannot have both row/column security
+#: and online materialized views" -- because the online copy would sit outside
+#: the policy. That is UC closing a governance hole, not an obstacle to work
+#: around: `svc_product_lookup` therefore omits the masked cost and margin
+#: columns entirely, so there is nothing left to protect.
 SYNCED_TABLES: Final[dict[str, str]] = {
     "stockout_risk_current": FCT_STOCKOUT_RISK,
     "forecast_next_13w": FCT_DEMAND_FORECAST,
-    "product_lookup": DIM_PRODUCT,
-    "fill_rate_summary": fq("gold", "agg_fill_rate_summary"),
+    "product_lookup": fq("gold", "svc_product_lookup"),
+    "fill_rate_summary": fq("gold", "svc_fill_rate_summary"),
+}
+
+#: Primary keys used when creating each synced table.
+SYNCED_TABLE_KEYS: Final[dict[str, tuple[str, ...]]] = {
+    "stockout_risk_current": ("sku_id", "retailer_code"),
+    "forecast_next_13w": ("sku_id", "retailer_code", "week_end_date"),
+    "product_lookup": ("sku_id",),
+    "fill_rate_summary": ("retailer_code", "week_end_date"),
 }
 
 #: Native OLTP tables the app writes to (not mirrors of Delta tables).

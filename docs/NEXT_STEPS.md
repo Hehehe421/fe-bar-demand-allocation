@@ -142,6 +142,70 @@ for policies — and the row filter on retailer should be extended to
 `fct_stockout_risk`, since that is what the planner persona actually reads in
 the app.
 
+## Stage D — PARTIALLY COMPLETE, and the blocker is specific
+
+**What works and is evidenced:** a Lakebase Autoscaling project
+(`projects/toy-demand-alloc`, PG 17) registered in Unity Catalog as the
+`toy_demand_alloc_online` catalog, and the native OLTP write path —
+`allocation.allocation_decisions` and `allocation.agent_interactions` with 7
+indexes, a generated `override_delta_units` column, a proven INSERT/SELECT and
+24 seeded decisions across accept / override / defer. Server-side point lookup
+is 0.044 ms by `EXPLAIN ANALYZE` (the ~79 ms wall figure is laptop-to-us-east-1
+RTT, not Postgres).
+
+**What is blocked: the four synced tables.** Every attempt reaches
+`SYNCED_TABLE_OFFLINE_FAILED`, and the sync pipeline's own error is:
+
+```text
+[ErrorClass=INVALID_STATE] Metastore storage root URL does not exist.
+```
+
+This metastore uses Default Storage and has no storage root, so the sync
+pipeline has nowhere to write its event log. The documented remedy is to set
+`new_pipeline_spec.storage_catalog` to a regular UC catalog — but on this API
+version that field **does not exist**. Probing the spec shows only
+`existing_pipeline_id` is accepted; `new_pipeline_spec`, `storage_catalog`,
+`storage_schema` and `pipeline_spec` are all rejected as unknown fields, and a
+`new_pipeline_spec` passed through the CLI is silently stored as `null`. The
+synced table also pins itself to the first auto-created pipeline
+(`b63df43e-b67e-47bf-ac95-e6d4abf6c4fa`), which is already broken, so recreating
+does not get a fresh one.
+
+Three ways forward, in order of preference:
+
+1. **Get a metastore storage root set** (metastore admin, which this identity
+   does not have). This fixes the root cause and makes synced tables work as
+   designed — and it is the same missing storage root that forced an explicit
+   `--storage-root` when this project's catalog was created.
+2. **Find a newer API/CLI** that accepts a pipeline storage catalog on the
+   synced-table spec, then re-run `python -m src.lakebase.sync`, which already
+   builds that field.
+3. **Substitute the read path**: replicate the four gold tables into Postgres
+   with a small scheduled job (read via the Statement Execution API, `COPY` into
+   Lakebase). This loses UC-managed sync semantics but gives the app a genuine
+   low-latency read path, and would need documenting as a deliberate
+   substitution the way the Stage A SQL Server path is.
+
+Two governance findings from this stage are worth keeping regardless:
+
+- **UC refuses to build an online copy of a table carrying a row filter or
+  column mask** (`cannot have both row/column security and online materialized
+  views`). That is UC closing a governance hole — an online replica sits outside
+  the policy. The resolution was `gold.svc_product_lookup`, which omits the
+  masked cost and margin columns entirely so there is nothing left to protect.
+- Retailer scoping therefore has to move into the app's own query for the
+  Lakebase read path. The authoritative governed path stays UC and Genie.
+
+**Also outstanding for D:** the write-back of `allocation_decisions` into UC as
+`gold.fct_allocation_decisions`. `databricks postgres create-cdf-config` (Beta)
+is the native candidate and was not yet tried; the fallback is a scheduled job
+reading Postgres and writing Delta.
+
+**Stray resource to clean up:** `toy-demand-alloc-db`, a legacy *Provisioned*
+Lakebase instance created before I realised Provisioned is retired. Nothing uses
+it. Delete with `databricks database delete-database-instance toy-demand-alloc-db`
+once confirmed.
+
 ## Remaining stages
 
 **D — Lakebase.** New instance (`config.LAKEBASE_INSTANCE`), synced tables for

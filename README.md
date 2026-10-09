@@ -79,7 +79,7 @@ landing files -> bronze/silver/gold -> features -> forecast -> risk table
 | **B — Unity Catalog** | Comments on every Gold table and column; tags; grants for 3 personas + app identity; row filter on retailer; column mask on cost/margin; 3 metric views; lineage | **Built** |
 | **C1 — Classical ML** | Feature Engineering table consumed via `FeatureLookup`, 7 candidates across 6 families in one MLflow experiment, leaderboard, UC registration with `@champion`/`@challenger`, 13-week forward scoring, `gold.fct_stockout_risk` | **Built** |
 | **C2 — GenAI** | MLflow `ResponsesAgent` on Claude via FMAPI with 5 real tools, end-to-end tracing, versioned prompt, 22-row eval with built-in judges + a custom mechanical scorer, registered in UC and deployed to a live Model Serving endpoint | **Built** |
-| **D — Lakebase** | New instance, synced tables for the app read path, native OLTP `allocation_decisions` table, sync back into UC | Not built |
+| **D — Lakebase** | Autoscaling project registered in UC; native OLTP `allocation_decisions` / `agent_interactions` with proven writes | **Partial** — synced tables blocked on a missing metastore storage root |
 | **E — Genie** | Space over Gold + metric views with instructions, synonyms and curated example SQL; ≥10 questions via the Conversation API | Not built |
 | **F — Databricks App** | "Allocation Command Center": KPI header, at-risk worklist, SKU detail, agent panel, accept/override writing to Lakebase, embedded Genie | Not built |
 
@@ -230,10 +230,15 @@ real requests.
   stated as such; this build ingests committed synthetic flat files via Auto
   Loader instead. No SQL Server connector was run.
 
-**Not built** — Stages D (Lakebase), E (Genie) and F (the app), and the business
-deck. There are no stub modules, empty notebooks, skeleton dashboards or
-asserted results for any of them. `src/genie/`, `src/lakebase/`,
-`src/serving/`, `app/` and `tests/` are empty directories.
+**Partially built — Stage D (Lakebase).** The Autoscaling project, its Unity
+Catalog registration and the native OLTP write path are built and evidenced. The
+four synced tables are blocked on a missing metastore storage root —
+`docs/NEXT_STEPS.md` has the verbatim error and three ways forward.
+
+**Not built** — Stages E (Genie) and F (the app), and the business deck. Nothing
+for them is faked or half-written: no placeholder modules, no unexecuted
+notebooks, no asserted results. `src/genie/` and `src/serving/`, `app/` and
+`tests/` are empty directories.
 
 `docs/PROVENANCE.md` records the conversation ID, every resource this build
 created, and confirmation that nothing on the workspace's do-not-touch list was
