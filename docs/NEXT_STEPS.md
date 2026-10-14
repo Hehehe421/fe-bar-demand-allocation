@@ -278,9 +278,49 @@ Genie. Note: registering a Lakebase instance's online catalog in UC needs
 grant has a 5-day TTL from 2026-10-08, so it may need re-requesting.
 
 **E — Genie.** Space over the gold tables *and the metric views*, with
-instructions, column synonyms and curated example SQL for the hard joins, then
-≥10 questions through the Conversation API including at least one the space got
-wrong plus the instruction change that fixed it.
+instructions, column synonyms and curated example SQL, then ≥10 questions
+through the Conversation API including at least one the space got wrong plus the
+instruction change that fixed it.
+
+*Schema discovery already done — start from this rather than re-probing.*
+`databricks genie create-space WAREHOUSE_ID` takes a `serialized_space` JSON
+**string**. There is no published schema and `get-space` does **not** echo it
+back, so it was mapped by probing error messages. Confirmed:
+
+```jsonc
+{
+  "version": 2,                       // required; 1 or 2. Omitting it gives
+                                      // "ExportConverter supports versions 1
+                                      // and 2, but got 0"
+  "data_sources": {                   // OBJECT, not an array
+    "tables": [
+      { "identifier": "catalog.schema.table" }   // `identifier`, NOT
+                                                 // full_name / name / table_name
+    ]
+  },
+  "instructions": { }                 // OBJECT (a string gives "Expected
+                                      // 'START_OBJECT'"). Sub-field names NOT
+                                      // yet mapped -- `general` is rejected.
+}
+```
+
+Rejected at top level: `datasets`, `example_queries`, `sample_questions`,
+`general_instructions`. Rejected inside a table entry: `full_name`, `name`,
+`table_name`, `catalog`/`schema`/`table`.
+
+Still to find: the `instructions` sub-fields for general instructions, column
+synonyms and curated example SQL. Two cheaper routes than more blind probing:
+build one space in the **UI** with all three populated and then read its
+`serialized_space` (a `GET` on the space with an export/serialized flag, or the
+`databricks genie` export path), or check whether `update-space` accepts a
+richer documented body. Creating probe spaces is cheap but they must be cleaned
+up with `databricks genie trash-space <id>` — three were created and trashed
+during this discovery.
+
+Then: `src/genie/create_space.py` and `src/genie/run_questions.py`, driving the
+Conversation API via `databricks genie create-message` /
+`get-message-attachment-query-result` to capture the generated SQL and rows per
+question.
 
 **F — App.** "Allocation Command Center" reading from Lakebase, with the agent
 panel calling the live `toy-allocation-agent` endpoint and the accept/override
