@@ -1,10 +1,8 @@
 # Demand forecasting and constrained allocation for a licensed toy manufacturer
 
-> **Build status: 4 of 6 stages complete.** Stages A (Lakeflow), B (Unity
-> Catalog), C1 (classical ML) and C2 (GenAI agent) are built, executed and
-> evidenced. Stage D (Lakebase) is **partial** — the Autoscaling project and the
-> native OLTP write path work; the synced read path is blocked on a missing
-> metastore storage root. Stages E (Genie) and F (the app) are **not built**,
+> **Build status: 5 of 6 stages complete.** Stages A (Lakeflow), B (Unity
+> Catalog), C1 (classical ML), C2 (GenAI agent) and D (Lakebase) are built,
+> executed and evidenced. Stages E (Genie) and F (the app) are **not built**,
 > and nothing in this repository claims otherwise: no empty modules, no
 > unexecuted notebooks, no asserted results for anything unbuilt. See
 > [Build status](#build-status) for exactly what exists.
@@ -81,7 +79,7 @@ landing files -> bronze/silver/gold -> features -> forecast -> risk table
 | **B — Unity Catalog** | Comments on every Gold table and column; tags; grants for 3 personas + app identity; row filter on retailer; column mask on cost/margin; 3 metric views; lineage | **Built** |
 | **C1 — Classical ML** | Feature Engineering table consumed via `FeatureLookup`, 7 candidates across 6 families in one MLflow experiment, leaderboard, UC registration with `@champion`/`@challenger`, 13-week forward scoring, `gold.fct_stockout_risk` | **Built** |
 | **C2 — GenAI** | MLflow `ResponsesAgent` on Claude via FMAPI with 5 real tools, end-to-end tracing, versioned prompt, 22-row eval with built-in judges + a custom mechanical scorer, registered in UC and deployed to a live Model Serving endpoint | **Built** |
-| **D — Lakebase** | Autoscaling project registered in UC; native OLTP `allocation_decisions` / `agent_interactions` with proven writes | **Partial** — synced tables blocked on a missing metastore storage root |
+| **D — Lakebase** | Autoscaling project registered in UC; 4 synced tables ONLINE matching UC row-for-row; native OLTP `allocation_decisions` / `agent_interactions`; decisions merged back into `gold.fct_allocation_decisions` | **Built** |
 | **E — Genie** | Space over Gold + metric views with instructions, synonyms and curated example SQL; ≥10 questions via the Conversation API | Not built |
 | **F — Databricks App** | "Allocation Command Center": KPI header, at-risk worklist, SKU detail, agent panel, accept/override writing to Lakebase, embedded Genie | Not built |
 
@@ -101,6 +99,7 @@ timestamp, the workspace, and the fully-qualified UC paths it touched.
 | C1 | [`evidence/03_ml_forecast.md`](evidence/03_ml_forecast.md) | Leaderboard of 7 candidates across 6 families on one holdout; accuracy decomposed by licence family and horizon through the `mv_forecast_accuracy` metric view; the p90-method comparison; UC registry state with both aliases resolved; the risk table tiered, with the constrained-allocation contention |
 | C1 | [`notebooks/03_demand_forecast.ipynb`](notebooks/03_demand_forecast.ipynb) · [md export](notebooks/exports/03_demand_forecast.md) · [`evidence/metrics/forecast_leaderboard.csv`](evidence/metrics/forecast_leaderboard.csv) | The full sweep as executed, including the three modelling errors found and corrected |
 | C2 | [`evidence/04_genai_agent.md`](evidence/04_genai_agent.md) | Runtime-resolved FMAPI endpoint; all five tools invoked against real UC objects; two full agent briefs verbatim; span tree with timings and token counts; 22-row evaluation with per-row scores and the failures in full; UC registration; **a real request/response against the live serving endpoint** |
+| D | [`evidence/05_lakebase.md`](evidence/05_lakebase.md) | `\dt` listing; 4 synced tables ONLINE with row counts matching UC exactly; server-side point lookup of **0.051 ms** by query plan; INSERT/SELECT proving a write landed; the decision round-tripped into `gold.fct_allocation_decisions` and joined back to the risk row that triggered it |
 | C2 | [`notebooks/04_allocation_agent.ipynb`](notebooks/04_allocation_agent.ipynb) · [md export](notebooks/exports/04_allocation_agent.md) · [`evidence/metrics/genai_eval_results.csv`](evidence/metrics/genai_eval_results.csv) | The agent run end to end, including the prompt-registry feature gate and the two deployment failures |
 
 Two results in there are worth calling out because they were produced rather
@@ -252,11 +251,6 @@ real requests.
 - **Lakeflow Connect from SQL Server** is the production ingest path and is
   stated as such; this build ingests committed synthetic flat files via Auto
   Loader instead. No SQL Server connector was run.
-
-**Partially built — Stage D (Lakebase).** The Autoscaling project, its Unity
-Catalog registration and the native OLTP write path are built and evidenced. The
-four synced tables are blocked on a missing metastore storage root —
-`docs/NEXT_STEPS.md` has the verbatim error and three ways forward.
 
 **Not built** — Stages E (Genie) and F (the app), and the business deck. Nothing
 for them is faked or half-written: no empty modules, no unexecuted notebooks,

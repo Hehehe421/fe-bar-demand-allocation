@@ -7,12 +7,21 @@ load.
 Two things about this workspace make the naive call fail, and both are worth
 knowing before reading the spec below.
 
-**1. The sync pipeline needs an explicit storage catalog.**
+**1. The sync pipeline needs an explicit storage catalog, and only the REST
+API will accept one.**
 The first attempt created all four synced tables successfully and then every
 one of them went to ``SYNCED_TABLE_OFFLINE_FAILED``, with the underlying
 pipeline reporting::
 
     [ErrorClass=INVALID_STATE] Metastore storage root URL does not exist.
+
+The fix is ``new_pipeline_spec.storage_catalog``, but the **CLI rejects that
+field client-side** -- ``databricks postgres create-synced-table`` warns
+"unknown field: new_pipeline_spec" and then stores it as ``null``, which looks
+exactly like the API not supporting it. It does support it. Posting the same
+body straight to ``/api/2.0/postgres/synced_tables`` is accepted, the field is
+persisted, and the table reaches ONLINE on a fresh pipeline. So this module
+talks to the REST API directly rather than shelling out to the CLI.
 
 This metastore uses Default Storage and has no storage root, so the sync
 pipeline has nowhere to write its event log and checkpoints. It must be told
@@ -59,7 +68,9 @@ import src.config as config  # noqa: E402
 STORAGE_CATALOG = config.CATALOG
 STORAGE_SCHEMA = "ml"
 
-TERMINAL_OK = "SYNCED_TABLE_ONLINE"
+#: Online states. The API reports ONLINE_NO_PENDING_UPDATE once a SNAPSHOT
+#: sync has completed and has nothing queued.
+TERMINAL_OK = ("SYNCED_TABLE_ONLINE", "SYNCED_TABLE_ONLINE_NO_PENDING_UPDATE")
 TERMINAL_BAD = ("FAILED", "OFFLINE_FAILED")
 
 
@@ -93,7 +104,7 @@ def delete_all(w: WorkspaceClient) -> None:
     for pg_table in config.SYNCED_TABLES:
         name = f"synced_tables/{qualified(pg_table)}"
         try:
-            w.api_client.do("DELETE", f"/api/2.0/{name}")
+            w.api_client.do("DELETE", f"/api/2.0/postgres/{name}")
             print(f"  deleted {pg_table}")
         except Exception as e:  # noqa: BLE001
             print(f"  delete {pg_table}: {type(e).__name__}: {str(e)[:90]}")
@@ -105,7 +116,7 @@ def create_all(w: WorkspaceClient) -> None:
         try:
             w.api_client.do(
                 "POST",
-                "/api/2.0/synced_tables",
+                "/api/2.0/postgres/synced_tables",
                 query={"synced_table_id": qualified(pg_table)},
                 body=body,
             )
@@ -118,7 +129,9 @@ def status(w: WorkspaceClient) -> dict[str, str]:
     out: dict[str, str] = {}
     for pg_table in config.SYNCED_TABLES:
         try:
-            r = w.api_client.do("GET", f"/api/2.0/synced_tables/{qualified(pg_table)}")
+            r = w.api_client.do(
+                "GET", f"/api/2.0/postgres/synced_tables/{qualified(pg_table)}"
+            )
             st = r.get("status") or {}
             out[pg_table] = str(st.get("detailed_state") or "?")
         except Exception as e:  # noqa: BLE001
@@ -133,7 +146,7 @@ def wait_online(w: WorkspaceClient, timeout_s: int = 2400) -> dict[str, str]:
         last = status(w)
         vals = list(last.values())
         print("  " + "  ".join(f"{k}={v}" for k, v in last.items())[:220])
-        if all(v == TERMINAL_OK for v in vals):
+        if all(v in TERMINAL_OK for v in vals):
             return last
         if any(any(b in v for b in TERMINAL_BAD) for v in vals):
             return last
@@ -160,7 +173,7 @@ def main() -> int:
     print("waiting for ONLINE ...")
     final = wait_online(w)
     print()
-    ok = sum(1 for v in final.values() if v == TERMINAL_OK)
+    ok = sum(1 for v in final.values() if v in TERMINAL_OK)
     for k, v in final.items():
         print(f"  {k:26} {v}")
     print(f"\n{ok} of {len(final)} synced tables ONLINE")
