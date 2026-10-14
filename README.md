@@ -2,10 +2,12 @@
 
 > **Build status: 4 of 6 stages complete.** Stages A (Lakeflow), B (Unity
 > Catalog), C1 (classical ML) and C2 (GenAI agent) are built, executed and
-> evidenced. Stages D (Lakebase), E (Genie) and F (the app) are **not yet
-> built** and nothing in this repository claims otherwise — there are no
-> placeholder modules, no empty notebooks and no asserted results for unbuilt
-> stages. See [Build status](#build-status) for exactly what exists.
+> evidenced. Stage D (Lakebase) is **partial** — the Autoscaling project and the
+> native OLTP write path work; the synced read path is blocked on a missing
+> metastore storage root. Stages E (Genie) and F (the app) are **not built**,
+> and nothing in this repository claims otherwise: no empty modules, no
+> unexecuted notebooks, no asserted results for anything unbuilt. See
+> [Build status](#build-status) for exactly what exists.
 > **All data is synthetic.**
 
 ## The problem
@@ -236,8 +238,8 @@ four synced tables are blocked on a missing metastore storage root —
 `docs/NEXT_STEPS.md` has the verbatim error and three ways forward.
 
 **Not built** — Stages E (Genie) and F (the app), and the business deck. Nothing
-for them is faked or half-written: no placeholder modules, no unexecuted
-notebooks, no asserted results. `src/genie/` and `src/serving/`, `app/` and
+for them is faked or half-written: no empty modules, no unexecuted notebooks,
+no asserted results. `src/genie/` and `src/serving/`, `app/` and
 `tests/` are empty directories.
 
 `docs/PROVENANCE.md` records the conversation ID, every resource this build

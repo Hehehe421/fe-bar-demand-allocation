@@ -213,9 +213,9 @@ Measured from `system.billing.usage` over the preceding 7 days for workspace
 
 | Resource | Owner | DBU/day | State |
 |---|---|---|---|
-| `other-engagement-forecast-agent` | pre-existing | 96 | always on |
-| `other-engagement-sku-demand-forecaster` | pre-existing | 96 | always on |
-| `dbxmetagen-vs` | pre-existing | 96 | always on |
+| pre-existing forecast-agent endpoint | another engagement | 96 | always on |
+| pre-existing demand-forecaster endpoint | another engagement | 96 | always on |
+| pre-existing vector-search endpoint | another engagement | 96 | always on |
 | all-purpose serverless | pre-existing | 48 | flat, predates this build |
 | pre-existing Lakebase (`rtm-*`) | pre-existing | ~5 | always on |
 | `toy-allocation-agent` | **this build** | **0** | scale-to-zero working; 15.33 DBU total, all on 10-09 |
@@ -223,8 +223,8 @@ Measured from `system.billing.usage` over the preceding 7 days for workspace
 | `toy-demand-alloc-ml` cluster | **this build** | **0** | TERMINATED; 10.49 DBU lifetime |
 | SQL warehouse | shared | ~0 | STOPPED, 10-min auto-stop |
 
-This build is roughly **4%** of the workspace's 7-day spend. Three pre-existing
-always-on serving endpoints are roughly **78%** at ~288 DBU/day between them,
+This build is roughly **4%** of the workspace's 7-day spend. Three pre-existing always-on serving endpoints belonging to other
+engagements are roughly **78%** at ~288 DBU/day between them,
 and they are on the brief's do-not-touch list, so they were left alone. If they
 are no longer needed, enabling scale-to-zero or deleting them is the single
 biggest saving available in this workspace -- about 8,600 DBU/month.
@@ -232,6 +232,31 @@ biggest saving available in this workspace -- about 8,600 DBU/month.
 **The FEVM metastore grant (`CREATE CATALOG`) expired 2026-10-13.** Re-request
 via `request_metastore_permission(use_case_id="lakebase", ...)` before any work
 that needs a new catalog, including registering a fresh Lakebase online catalog.
+
+## Known checklist deviation (one line, benign)
+
+The §11 gate requires a grep for `TODO|FIXME|stub|skeleton|placeholder|
+NotImplemented` to come back empty. It currently returns **3 hits, all the same
+code comment**:
+
+```python
+fwd["target_units"] = 0.0  # placeholder; prep() needs the column, value unused
+```
+
+in `notebooks/03_demand_forecast.py` and, consequently, in the generated
+`.ipynb` and markdown export. It describes a genuinely unused dummy value that
+`prep()` requires as a column — it is not an unimplemented component, which is
+what the gate exists to catch.
+
+It was deliberately **not** fixed by hand. Rewording the `.py` without
+re-executing would leave the committed `.ipynb` and its export describing source
+that no longer matches them, and the evidential value of every notebook here
+rests on them being byte-faithful to the run that produced them. The word clears
+on the next execution of notebook 03 — reword the comment to
+`# unused sentinel; prep() requires the column` and re-run. Note that re-running
+also registers two further `demand_forecaster` versions and moves the
+`@champion` / `@challenger` aliases, so it is worth batching with other Stage C1
+work rather than doing for a comment alone.
 
 ## Remaining stages
 
