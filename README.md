@@ -154,6 +154,27 @@ python tools/dbx_notebook.py notebooks/02_governance_and_baseline.py \
 python tools/evidence_02_unity_catalog.py
 ```
 
+### Where this lands in the workspace
+
+Notebooks are executed through the Command Execution API, which runs code in a
+context on the cluster and returns output over the wire — it does **not** create
+a workspace notebook. So `tools/dbx_notebook.py` also imports each executed
+notebook into the workspace with `--format JUPYTER`, which preserves the
+captured outputs, giving an openable copy that renders exactly as the committed
+one. Without that step the committed evidence is complete but there is nothing
+to open in the Databricks UI.
+
+| Asset | Workspace location |
+|---|---|
+| Notebooks (with outputs) | `/Workspace/Users/<you>/fe-bar-demand-allocation/notebooks/` |
+| Source modules | `/Workspace/Users/<you>/fe-bar-demand-allocation/src/` |
+| Catalog | `toy_demand_allocation` (`bronze`, `silver`, `gold`, `ml`) |
+| Pipeline | `toy-demand-allocation-medallion` |
+| MLflow experiments | `.../toy_demand_allocation_forecast` and `..._agent` |
+| Registered models | `ml.demand_forecaster`, `ml.allocation_agent` |
+| Serving endpoint | `toy-allocation-agent` |
+| Lakebase | `projects/toy-demand-alloc`, Postgres schema `allocation` |
+
 `src/config.py` is the single source of truth for every catalog, schema, table,
 warehouse, cluster and endpoint name. Nothing under `notebooks/`, `src/` or
 `tools/` hardcodes one.

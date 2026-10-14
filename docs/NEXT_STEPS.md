@@ -81,6 +81,15 @@ all 20 medallion tables persist.
     at runtime from `config.FMAPI_ENDPOINT_PREFERENCE` and record which one was
     used.
 
+## Notebooks are published to the workspace automatically
+
+`tools/dbx_notebook.py` now imports each executed notebook into
+`/Workspace/Users/sixuan.he@databricks.com/fe-bar-demand-allocation/notebooks/`
+after capturing its outputs. This was missing for the first four notebooks and
+had to be backfilled: the Command Execution API never creates a workspace
+notebook, so the committed `.ipynb` files were complete while the workspace had
+nothing openable in the UI. Pass `--publish-to ''` to skip.
+
 ## How to run a notebook and commit real outputs
 
 ```bash

@@ -30,6 +30,7 @@ Writes ``notebooks/01_generate_data.ipynb`` and
 from __future__ import annotations
 
 import argparse
+import base64
 import datetime as dt
 import pathlib
 import re
@@ -219,6 +220,27 @@ def build_markdown(title: str, cells: list[Cell], results: dict[int, tuple[str, 
     return "\n".join(out)
 
 
+def publish(ipynb: pathlib.Path, workspace_dir: str, profile: str) -> str | None:
+    """Import an executed notebook into the workspace, outputs included."""
+    from databricks.sdk.service.workspace import ImportFormat, Language
+
+    w = WorkspaceClient(profile=profile)
+    target = f"{workspace_dir.rstrip('/')}/{ipynb.stem}"
+    try:
+        w.workspace.mkdirs(workspace_dir)
+        w.workspace.import_(
+            path=target,
+            content=base64.b64encode(ipynb.read_bytes()).decode(),
+            format=ImportFormat.JUPYTER,
+            language=Language.PYTHON,
+            overwrite=True,
+        )
+        return target
+    except Exception as e:  # noqa: BLE001 - publishing must not fail the run
+        print(f"  warning: could not publish to {target}: {type(e).__name__}: {e}")
+        return None
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("notebook", type=pathlib.Path, help="percent-format .py notebook")
@@ -227,6 +249,12 @@ def main() -> int:
     ap.add_argument("--cell-timeout", type=int, default=3600)
     ap.add_argument("--keep-going", action="store_true",
                     help="continue after a failing cell instead of stopping")
+    ap.add_argument(
+        "--publish-to",
+        default="/Workspace/Users/sixuan.he@databricks.com/fe-bar-demand-allocation/notebooks",
+        help="workspace directory to import the executed .ipynb into; "
+             "pass '' to skip",
+    )
     args = ap.parse_args()
 
     src = args.notebook
@@ -271,6 +299,19 @@ def main() -> int:
     md.write_text(build_markdown(title, cells, results, header))
 
     print(f"wrote {ipynb} and {md}")
+
+    # Publish into the workspace as well.
+    #
+    # The Command Execution API runs code in a context on the cluster and
+    # returns output over the wire -- it never creates a workspace notebook. So
+    # executing this way produces a committed .ipynb with real outputs but
+    # leaves NOTHING to open in the Databricks UI, which is no good for review
+    # or for demoing. Importing with --format JUPYTER preserves the captured
+    # outputs, so the workspace copy renders exactly as the committed one.
+    if args.publish_to:
+        published = publish(ipynb, args.publish_to, args.profile)
+        print(f"published {published}" if published else "publish skipped")
+
     if failed:
         print(f"FAILED cells: {failed}")
     return 1 if failed else 0
