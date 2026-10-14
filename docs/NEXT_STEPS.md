@@ -201,10 +201,37 @@ Two governance findings from this stage are worth keeping regardless:
 is the native candidate and was not yet tried; the fallback is a scheduled job
 reading Postgres and writing Delta.
 
-**Stray resource to clean up:** `toy-demand-alloc-db`, a legacy *Provisioned*
-Lakebase instance created before I realised Provisioned is retired. Nothing uses
-it. Delete with `databricks database delete-database-instance toy-demand-alloc-db`
-once confirmed.
+**Cleaned up 2026-10-13:** `toy-demand-alloc-db`, a legacy *Provisioned*
+Lakebase instance created before Provisioned was understood to be retired, has
+been deleted. It was billing ~13 DBU/day with no scale-to-zero and nothing
+referenced it. Stage D uses the Autoscaling project `projects/toy-demand-alloc`.
+
+## Cost state as of 2026-10-13
+
+Measured from `system.billing.usage` over the preceding 7 days for workspace
+`7474649643770783`. Worth recording because the intuition was wrong:
+
+| Resource | Owner | DBU/day | State |
+|---|---|---|---|
+| `other-engagement-forecast-agent` | pre-existing | 96 | always on |
+| `other-engagement-sku-demand-forecaster` | pre-existing | 96 | always on |
+| `dbxmetagen-vs` | pre-existing | 96 | always on |
+| all-purpose serverless | pre-existing | 48 | flat, predates this build |
+| pre-existing Lakebase (`rtm-*`) | pre-existing | ~5 | always on |
+| `toy-allocation-agent` | **this build** | **0** | scale-to-zero working; 15.33 DBU total, all on 10-09 |
+| Lakebase `toy-demand-alloc` | **this build** | **0** | IDLE since 10-12 |
+| `toy-demand-alloc-ml` cluster | **this build** | **0** | TERMINATED; 10.49 DBU lifetime |
+| SQL warehouse | shared | ~0 | STOPPED, 10-min auto-stop |
+
+This build is roughly **4%** of the workspace's 7-day spend. Three pre-existing
+always-on serving endpoints are roughly **78%** at ~288 DBU/day between them,
+and they are on the brief's do-not-touch list, so they were left alone. If they
+are no longer needed, enabling scale-to-zero or deleting them is the single
+biggest saving available in this workspace -- about 8,600 DBU/month.
+
+**The FEVM metastore grant (`CREATE CATALOG`) expired 2026-10-13.** Re-request
+via `request_metastore_permission(use_case_id="lakebase", ...)` before any work
+that needs a new catalog, including registering a fresh Lakebase online catalog.
 
 ## Remaining stages
 
