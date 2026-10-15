@@ -1,0 +1,119 @@
+{
+  "space_id": "01f1c8cc66d713fba1decec949c0740c",
+  "instruction_rev": 2,
+  "tag": "rev2b",
+  "results": [
+    {
+      "key": "q13_critical_by_account",
+      "question": "How many critical positions are there for each account?",
+      "why": "added for the executive tab's suggested questions",
+      "conversation_id": "01f1c8e10ff91b6b9ca26a58a5c0f889",
+      "message_id": "01f1c8e11009153fb4ccde59f3a036ed",
+      "status": "MessageStatus.COMPLETED",
+      "seconds": 19.9,
+      "genie_description": "You want to see the number of critical stockout risk positions for each retailer account.",
+      "genie_sql": "SELECT\n  `retailer_code`,\n  COUNT(*) AS `critical_positions`\nFROM `toy_demand_allocation`.`gold`.`fct_stockout_risk`\nWHERE `risk_tier` = 'CRITICAL'\n  AND `retailer_code` IS NOT NULL\nGROUP BY `retailer_code`\nORDER BY `critical_positions` DESC, `retailer_code` ASC",
+      "genie_text": "There are **3 accounts** with critical positions: **ETAIL_C** has **147**, **MASS_B** has **147**, and **MASS_A** has **140**. **ETAIL_C** and **MASS_B** are tied for the highest count, each **7** above **MASS_A**.",
+      "genie_columns": [
+        "retailer_code",
+        "critical_positions"
+      ],
+      "genie_rows": [
+        [
+          "ETAIL_C",
+          "147"
+        ],
+        [
+          "MASS_B",
+          "147"
+        ],
+        [
+          "MASS_A",
+          "140"
+        ]
+      ],
+      "genie_row_count": 3,
+      "reference_sql": "SELECT retailer_code, COUNT(*) AS critical_positions FROM toy_demand_allocation.gold.fct_stockout_risk WHERE risk_tier = 'CRITICAL' GROUP BY retailer_code ORDER BY retailer_code",
+      "reference_columns": [
+        "retailer_code",
+        "critical_positions"
+      ],
+      "reference_rows": [
+        [
+          "ETAIL_C",
+          "147"
+        ],
+        [
+          "MASS_A",
+          "140"
+        ],
+        [
+          "MASS_B",
+          "147"
+        ]
+      ],
+      "verdict": "PASS",
+      "detail": "every reference row found, same row count"
+    },
+    {
+      "key": "q14_revenue_by_tier",
+      "question": "What is the revenue at risk by risk tier?",
+      "why": "added for the executive tab's suggested questions",
+      "conversation_id": "01f1c8e11cb3196683b016ca736ec8db",
+      "message_id": "01f1c8e11cc41cdda01635ac5fe5e10a",
+      "status": "MessageStatus.COMPLETED",
+      "seconds": 18.2,
+      "genie_description": "You want to see total revenue at risk broken down by risk tier (CRITICAL, HIGH, MEDIUM, LOW), ranked from highest to lowest exposure.",
+      "genie_sql": "SELECT\n  `risk_tier`,\n  SUM(`revenue_at_risk_usd`) AS `revenue_at_risk_usd`\nFROM `toy_demand_allocation`.`gold`.`fct_stockout_risk`\nWHERE `risk_tier` IS NOT NULL\nGROUP BY `risk_tier`\nORDER BY `revenue_at_risk_usd` DESC",
+      "genie_text": "Revenue at risk is highest in **MEDIUM** at **$556,576.44**, followed by **CRITICAL** at **$509,957.82**, **HIGH** at **$216,009.91**, and **LOW** at **$98,847.73**. Across the 4 risk tiers shown, **MEDIUM** and **CRITICAL** account for the largest exposure, with both well above **HIGH** and **LOW**.",
+      "genie_columns": [
+        "risk_tier",
+        "revenue_at_risk_usd"
+      ],
+      "genie_rows": [
+        [
+          "MEDIUM",
+          "556576.44"
+        ],
+        [
+          "CRITICAL",
+          "509957.81999999995"
+        ],
+        [
+          "HIGH",
+          "216009.91"
+        ],
+        [
+          "LOW",
+          "98847.72999999998"
+        ]
+      ],
+      "genie_row_count": 4,
+      "reference_sql": "SELECT risk_tier, ROUND(SUM(revenue_at_risk_usd), 0) AS revenue_at_risk FROM toy_demand_allocation.gold.fct_stockout_risk GROUP BY risk_tier ORDER BY risk_tier",
+      "reference_columns": [
+        "risk_tier",
+        "revenue_at_risk"
+      ],
+      "reference_rows": [
+        [
+          "CRITICAL",
+          "509958.0"
+        ],
+        [
+          "HIGH",
+          "216010.0"
+        ],
+        [
+          "LOW",
+          "98848.0"
+        ],
+        [
+          "MEDIUM",
+          "556576.0"
+        ]
+      ],
+      "verdict": "PASS",
+      "detail": "every reference row found, same row count"
+    }
+  ]
+}

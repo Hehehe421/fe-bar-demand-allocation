@@ -215,6 +215,20 @@ def main() -> int:
         if r.get("genie_text"):
             a(f"> {r['genie_text'][:420]}")
         a("")
+    r2b_path = M / "genie_run_rev2b.json"
+    if r2b_path.exists():
+        r2b = json.loads(r2b_path.read_text())
+        a("## 5b. Two questions added for the app's executive tab")
+        a("")
+        a("The executive tab offers six suggested questions. Four were already scored above; these two "  # noqa: E501
+          "were added and scored against reference SQL before being offered (revision 2 of the space, "  # noqa: E501
+          "unchanged).")
+        a("")
+        a("| question | verdict | seconds |")
+        a("|---|---|---|")
+        for r in r2b["results"]:
+            a(f"| {r['question']} | {r['verdict']} | {r['seconds']} |")
+        a("")
     a("## 6. What this does and does not show")
     a("")
     a("* Genie answered the governed KPI questions (WAPE, P90 coverage, fill rate, OTIF) "

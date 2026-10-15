@@ -135,4 +135,18 @@ QUESTIONS: Final[tuple[Q, ...]] = (
         why="governance: the Stage B column mask hides cost and margin; Genie must "
         "not invent one",
     ),
-)
+
+    Q(
+        "q13_critical_by_account",
+        "How many critical positions are there for each account?",
+        f"SELECT retailer_code, COUNT(*) AS critical_positions FROM {G}.fct_stockout_risk "
+        f"WHERE risk_tier = 'CRITICAL' GROUP BY retailer_code ORDER BY retailer_code",
+        why="added for the executive tab's suggested questions",
+    ),
+    Q(
+        "q14_revenue_by_tier",
+        "What is the revenue at risk by risk tier?",
+        f"SELECT risk_tier, ROUND(SUM(revenue_at_risk_usd), 0) AS revenue_at_risk "
+        f"FROM {G}.fct_stockout_risk GROUP BY risk_tier ORDER BY risk_tier",
+        why="added for the executive tab's suggested questions",
+    ),)

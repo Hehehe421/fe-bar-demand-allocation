@@ -51,7 +51,7 @@ AutoML appears once, early, as *"and yes, you can do it this way too."* Shown, n
 | **C2 — GenAI agent** | Built; endpoint **now actually reads data** (it could not before — §6 #39–41) | `evidence/04_genai_agent.md` |
 | **D — Lakebase** | Built, trimmed to 2 synced tables | `evidence/05_lakebase.md` |
 | **E — Genie** | **Built**, 13/13, one intermittent error recorded | `evidence/06_genie.md` |
-| **F — App** | **Built and deployed**, 10/10 smoke, decision flow verified on the deployed app | `evidence/07_app.md` |
+| **F — App** | **Built and deployed**: 3 tabs (Executive · Performance & risk · Forecast & decide), 13/13 unit tests, 16/16 live smoke, decision flow verified on the deployed app | `evidence/07_app.md` |
 | **Deck + docs** | **Not built — START HERE** | — |
 
 ### Headline measured numbers (all computed, none asserted)
@@ -106,6 +106,7 @@ profile **`vm-summer-classic`**, workspace id `7474649643770783`.
 | UC online catalog | `toy_demand_alloc_online` | 2 synced tables: `stockout_risk_current`, `forecast_next_13w` |
 | Genie space | `Demand & Allocation`, id `01f1c8cc66d713fba1decec949c0740c` | id also in `evidence/metrics/genie_space.json` |
 | App | `allocation-command-center` — https://allocation-command-center-7474649643770783.aws.databricksapps.com | service principal `73bbee7a-df47-4bb9-b503-30e5b392657f`; source `/Workspace/Users/sixuan.he@databricks.com/apps/allocation-command-center` |
+| Reviewable copy in the workspace | `/Workspace/Users/sixuan.he@databricks.com/fe-bar-demand-allocation/` | `START_HERE.md` is the index; notebooks (with outputs), docs, evidence, screenshots. Refresh with `python tools/publish_workspace.py` |
 | View | `gold.v_stockout_risk` | the agent's read path for stockout risk — workaround, §6 #41 |
 | Notebooks in workspace | `/Workspace/Users/sixuan.he@databricks.com/fe-bar-demand-allocation/notebooks/` | with outputs |
 | Source in workspace | `.../fe-bar-demand-allocation/src/` | re-upload after editing `src/` |
@@ -190,6 +191,17 @@ Forgetting this produced a stale leaderboard that looked identical to the old on
 against reference SQL in `questions.py`; `python tools/evidence_06_genie.py` renders
 the evidence. `space_definition.LATEST_REV` is the current revision.
 
+**Tests:** `python tests/test_app_pure.py` (13 unit tests, no network) and
+`python tests/smoke_app.py` (16 live checks; `--fast` skips the slow endpoint calls and the
+agent). The smoke test wakes the scale-to-zero endpoints first and its write check is rolled back.
+
+**Publish for review:** `python tools/publish_workspace.py` copies the executed notebooks (as
+notebooks with outputs), docs, evidence, screenshots and a generated `START_HERE.md` into the
+workspace folder. Re-run it after any notebook or evidence change.
+
+**Deploy the app:** `python app/deploy.py` (idempotent: app + resources + grants + upload +
+deploy). `--grants` re-applies grants only; `--render` writes `app/app.yaml`.
+
 **Commit discipline:** one commit per stage with its evidence file; never commit a
 notebook with a failing cell; end messages with
 `Co-authored-by: Isaac <no-reply@databricks.com>`; use `git commit --file=<path>`.
@@ -200,18 +212,27 @@ notebook with a failing cell; end messages with
 
 ### 5a. Stage F — the app: DONE; what is left
 
-Built, deployed and verified (`evidence/07_app.md`). Open items, none blocking:
+Built, deployed and verified (`evidence/07_app.md`): an executive tab (computed headline, attention
+list, Genie with six proven questions, top exposures with generated art), a performance tab (KPI
+cards, trends, commitment dumbbell, accuracy by family, tier chart, a DC exposure **map**, business
+cost), and a forecast-and-decide tab (worklist with filters and CSV export, SKU card, forecast,
+real-time check, agent, decision, decision log). Open items, none blocking:
 
 - **The deployed UI was never clicked through in a browser** — workspace SSO blocked the
-  automation. Open the URL once yourself and try: select a row → Ask the agent → Record
-  decision. Then delete the row you create (or keep it and re-sync: the KPIs and Genie
-  counts assume the 25 seeded decisions).
+  automation. Open the URL once and try: Executive → Review → Ask the agent → Record decision.
+  Then delete the row you create (the KPIs and Genie counts assume the 25 seeded decisions).
 - **Per-user planner scoping is simulated** (a dropdown filtering the app's own query).
-  Real scoping needs on-behalf-of auth mapped to a retailer.
+- **Product images are generated illustrations** (`app/art.py`), not photographs. Swap `sku_svg`
+  for a real asset URL in production.
+- **Data-quality issue found:** the synthetic catalog's product names are independent of
+  `category` (about half say "Plushie"/"Figure" opposite to their category). The app derives its
+  captions and art from `category` and keeps the source name as a tooltip. Fix it in
+  `src/datagen/generate.py` if the catalog is regenerated.
+- **Business-cost tiles are a static snapshot** (`app/data/kpi_baseline.csv`, measured
+  2026-10-08), not a live query. Refresh it with `evidence/metrics/kpi_baseline.csv`.
 - **Run `python app/deploy.py --grants` after any `sync.py` re-sync** — re-creating a synced
-  table drops the app role's `SELECT` on it.
-- The decision is not written back to UC by the app; `src/lakebase/writeback.py` does that
-  as a job and was not re-run.
+  table drops the app role's `SELECT`.
+- The decision is not written back to UC by the app; `src/lakebase/writeback.py` does that.
 
 ### 5b. Deck and docs — START HERE
 
@@ -367,6 +388,26 @@ endpoint that shipped for a week unable to read any data (§6 #39).
     `databricks auth login --profile vm-summer-classic` fixes it and completed without a click.
 48. `chrome-devtools` `wait_for` returns the whole page snapshot; with a 250-row table it blew
     the output limit. The worklist is paginated for this reason too.
+
+**App and visual work (added when redesigning the app for executives)**
+49. **Plotly geo: only the default Albers USA projection rendered.** Explicit
+    `lonaxis_range`/`lataxis_range` and mercator/equirectangular variants produced blank axes.
+    Compare variants side by side before committing to one.
+50. **Bootstrap's `.lead` class** silently enlarges any element given it. Do not name your own
+    CSS class `lead`.
+51. **An averaged threshold hides the account that is failing.** A fill-rate chip computed against
+    the mean commitment said "OK" while MASS_A was below its 97%. Check every account
+    (`narrative.fill_status`).
+52. **Agent cold start from zero: 217 s** (forecaster 52–138 s). Wake both at start-up and say so
+    in the UI. A smoke test that includes the agent can take over 3 minutes for this reason.
+53. Pattern-matching callbacks (`{"type": ..., "sku": ALL}`) work for buttons rendered inside another
+    callback's output. When one callback needs to write a store another already writes, use
+    `allow_duplicate=True` with `prevent_initial_call=True`, and make the original callback ignore an
+    empty selection or the two will fight.
+54. `chrome-devtools` full-page screenshots repeat a sticky header; set it `position: static` for
+    the capture. The viewport screenshot height is capped, so use full page for long tabs.
+55. **Look at every chart before shipping it.** A clipped label, a blank map and a false "OK" chip were
+    all invisible in code and obvious in a screenshot.
 
 ## 7. Cost — check before and after
 

@@ -81,7 +81,7 @@ landing files -> bronze/silver/gold -> features -> forecast -> risk table
 | **C2 — GenAI** | MLflow `ResponsesAgent` on Claude via FMAPI with 5 real tools, end-to-end tracing, versioned prompt, 22-row eval with built-in judges + a custom mechanical scorer, registered in UC and deployed to a live Model Serving endpoint | **Built** |
 | **D — Lakebase** | Autoscaling project registered in UC; 2 synced tables ONLINE matching UC row-for-row; native OLTP `allocation_decisions` / `agent_interactions`; decisions merged back into `gold.fct_allocation_decisions` | **Built** |
 | **E — Genie** | Space over 4 Gold tables + 4 governed metric views with synonyms, joins, curated example SQL and 12 benchmarks; 13 questions through the Conversation API scored against reference SQL, including one Genie got wrong intermittently | **Built** |
-| **F — Databricks App** | "Allocation Command Center": KPI header, at-risk worklist, SKU detail with batch and real-time forecast, agent panel, accept/override/defer writing to Lakebase, Genie | **Built** |
+| **F — Databricks App** | "Allocation Command Center", three tabs: an executive summary (computed headline, attention list, Genie, top exposures with generated product art), performance and risk (KPIs, trends, accuracy, a distribution-centre map), and forecast and decide (worklist, batch and real-time forecast, agent, accept/override/defer written to Lakebase) | **Built** |
 
 ## Evidence index
 

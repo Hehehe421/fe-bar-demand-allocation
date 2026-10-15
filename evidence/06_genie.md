@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Produced by | `src/genie/{space_definition,create_space,run_questions,questions}.py`, `tools/evidence_06_genie.py` |
-| Generated at | 2026-10-15 19:40:27 UTC |
+| Generated at | 2026-10-15 21:54:29 UTC |
 | Space | `Demand & Allocation` — `01f1c8cc66d713fba1decec949c0740c` |
 | URL | https://fevm-stable-classic-pqjg18.cloud.databricks.com/genie/rooms/01f1c8cc66d713fba1decec949c0740c |
 | Warehouse | `a6857db5911f7af1` |
@@ -381,6 +381,15 @@ Reference: ['gross_margin_pct'] [[None]]
 Verdict  : PASS — masked columns came back NULL / no value stated
 ```
 > For **SKU-01723**, the gross margin is **not available** because `gross_margin_pct` is **null**. The single returned record shows **sku_id = SKU-01723** with no gross margin value populated.
+
+## 5b. Two questions added for the app's executive tab
+
+The executive tab offers six suggested questions. Four were already scored above; these two were added and scored against reference SQL before being offered (revision 2 of the space, unchanged).
+
+| question | verdict | seconds |
+|---|---|---|
+| How many critical positions are there for each account? | PASS | 19.9 |
+| What is the revenue at risk by risk tier? | PASS | 18.2 |
 
 ## 6. What this does and does not show
 
