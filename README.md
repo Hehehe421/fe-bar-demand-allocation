@@ -114,8 +114,8 @@ than asserted:
   generator injected, and `pos_units_non_negative` dropped 992 of 997 injected
   negatives (the other 5 were in rows already removed as duplicates).
 - **The forecast is good where demand is predictable and bad where it is not,
-  and the evidence says which.** 20.5% WAPE on `EVERGREEN` against 110.2% on
-  `SOCIAL_TREND`, whose p90 interval covers only 74.7% of actuals against a 90%
+  and the evidence says which.** 20.4% WAPE on `EVERGREEN` against 109.9% on
+  `SOCIAL_TREND`, whose p90 interval covers only 74.1% of actuals against a 90%
   target. Since that p90 drives the risk table, the risk table understates
   exposure on exactly the trend items that matter most — recorded as a
   limitation rather than averaged away into a single portfolio number.
@@ -170,7 +170,7 @@ to open in the Databricks UI.
 | Catalog | `toy_demand_allocation` (`bronze`, `silver`, `gold`, `ml`) |
 | Pipeline | `toy-demand-allocation-medallion` |
 | MLflow experiments | `.../toy_demand_allocation_forecast` and `..._agent` |
-| Registered models | `ml.demand_forecaster`, `ml.allocation_agent` |
+| Registered models | `ml.demand_forecaster` (feature-backed, batch), `ml.demand_forecaster_rt` (real-time), `ml.allocation_agent` |
 | Serving endpoint | `toy-allocation-agent` |
 | Lakebase | `projects/toy-demand-alloc`, Postgres schema `allocation` |
 

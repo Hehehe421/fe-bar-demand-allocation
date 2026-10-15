@@ -1,7 +1,7 @@
 # 03 demand forecast
 
 > Executed by `tools/dbx_notebook.py` on Databricks cluster `1008-205814-qhbfm7tc` (03_demand_forecast), profile `vm-summer-classic`.
-> Started 2026-10-09 20:18:45 UTC, finished 2026-10-09 20:28:38 UTC. Outputs below are captured verbatim from the cluster.
+> Started 2026-10-15 18:32:15 UTC, finished 2026-10-15 18:42:19 UTC. Outputs below are captured verbatim from the cluster.
 
 # Stage C1 — Demand forecast: feature store, multi-algorithm sweep, champion/challenger
 
@@ -10,8 +10,8 @@ the spine that Stages C2, D, E and F all consume:
 
 * `ml.demand_features_weekly` — a Feature Engineering table, keyed on
   (`sku_id`, `retailer_code`, `week_end_date`), joined into the training set
-  through a `FeatureLookup` so point-in-time correctness and feature lineage are
-  demonstrable rather than asserted.
+  through a `FeatureLookup` so feature lineage is demonstrable rather than
+  asserted.
 * `ml.demand_forecaster` — the winning model registered in Unity Catalog, with
   `@champion` on the winner and `@challenger` on the runner-up.
 * `gold.fct_demand_forecast` — 13 weeks forward, p50 and p90.
@@ -259,10 +259,15 @@ feature columns: 33 (6 categorical)
 
 ## 3. Register the feature table in Feature Engineering
 
-Written as a real Feature Engineering table with a primary key and a timeseries
-column, so the `FeatureLookup` below is a genuine point-in-time join and the
+Written as a real Feature Engineering table with a composite primary key, so the
 lineage from `gold.fct_demand_weekly` through this table into the model is
 visible in Unity Catalog.
+
+There is deliberately **no timeseries column**. The leakage guard in this build
+is the frame, not the feature layer: features are computed at the origin week and
+the label is taken from origin + h (section 4), with a single-origin holdout. The
+lookup therefore joins on the origin week exactly; an as-of join would add
+nothing and would put the timestamp semantics in a place a reviewer cannot see.
 
 ```python
 from databricks.feature_engineering import FeatureEngineeringClient, FeatureLookup  # noqa: E402
@@ -275,7 +280,6 @@ spark.sql(f"DROP TABLE IF EXISTS {config.FEATURE_TABLE}")
 fe.create_table(
     name=config.FEATURE_TABLE,
     primary_keys=["sku_id", "retailer_code", "week_end_date"],
-    timeseries_columns="week_end_date",
     df=feature_df,
     description=(
         "Weekly demand features at SKU x retailer x forecast-origin week. Lags, "
@@ -292,10 +296,9 @@ spark.sql(f"DESCRIBE TABLE EXTENDED {config.FEATURE_TABLE}").show(60, truncate=F
 _Output:_
 
 ```text
-2026/10/09 20:19:12 INFO databricks.ml_features._compute_client._compute_client: Setting columns ['sku_id', 'retailer_code', 'week_end_date'] of table 'toy_demand_allocation.ml.demand_features_weekly' to NOT NULL.
-2026/10/09 20:19:15 INFO databricks.ml_features._compute_client._compute_client: Setting Primary Keys constraint ['sku_id', 'retailer_code', 'week_end_date'] on table 'toy_demand_allocation.ml.demand_features_weekly'.
-2026/10/09 20:19:34 INFO databricks.ml_features._spark_client._spark_client: Feature Engineering client applies Z-ordering to this table by default. You may want to explore Liquid Clustering for better performance.
-2026/10/09 20:19:36 INFO databricks.ml_features._compute_client._compute_client: Created feature table 'toy_demand_allocation.ml.demand_features_weekly'.
+2026/10/15 18:32:41 INFO databricks.ml_features._compute_client._compute_client: Setting columns ['sku_id', 'retailer_code', 'week_end_date'] of table 'toy_demand_allocation.ml.demand_features_weekly' to NOT NULL.
+2026/10/15 18:32:44 INFO databricks.ml_features._compute_client._compute_client: Setting Primary Keys constraint ['sku_id', 'retailer_code', 'week_end_date'] on table 'toy_demand_allocation.ml.demand_features_weekly'.
+2026/10/15 18:33:01 INFO databricks.ml_features._compute_client._compute_client: Created feature table 'toy_demand_allocation.ml.demand_features_weekly'.
 created feature table toy_demand_allocation.ml.demand_features_weekly
 287966 rows
 +----------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------+
@@ -346,20 +349,20 @@ created feature table toy_demand_allocation.ml.demand_features_weekly
 |Catalog                     |toy_demand_allocation                                                                                                                                                                                                                                                                                                                                                                                                             |                                                                                                                                 |
 |Database                    |ml                                                                                                                                                                                                                                                                                                                                                                                                                                |                                                                                                                                 |
 |Table                       |demand_features_weekly                                                                                                                                                                                                                                                                                                                                                                                                            |                                                                                                                                 |
-|Created Time                |Fri Oct 09 20:19:11 UTC 2026                                                                                                                                                                                                                                                                                                                                                                                                      |                                                                                                                                 |
+|Created Time                |Thu Oct 15 18:32:40 UTC 2026                                                                                                                                                                                                                                                                                                                                                                                                      |                                                                                                                                 |
 |Last Access                 |UNKNOWN                                                                                                                                                                                                                                                                                                                                                                                                                           |                                                                                                                                 |
 |Created By                  |Spark                                                                                                                                                                                                                                                                                                                                                                                                                             |                                                                                                                                 |
 |Type                        |MANAGED                                                                                                                                                                                                                                                                                                                                                                                                                           |                                                                                                                                 |
 |Comment                     |Weekly demand features at SKU x retailer x forecast-origin week. Lags, rolling level and dispersion, momentum, promo and stockout pressure, calendar position and product attributes. Consumed through a FeatureLookup by ml.demand_forecaster. SYNTHETIC DATA.                                                                                                                                                                   |                                                                                                                                 |
-|Location                    |s3://stable-classic-pqjg18-ext-s3-049629455384-e6feh9/toy_demand_allocation/__unitystorage/catalogs/e3f0f040-a473-4688-b562-4e96c65f8c46/tables/5fee9cd8-3449-4534-8a2a-0ffc3bb93bc6                                                                                                                                                                                                                                              |                                                                                                                                 |
+|Location                    |s3://stable-classic-pqjg18-ext-s3-049629455384-e6feh9/toy_demand_allocation/__unitystorage/catalogs/e3f0f040-a473-4688-b562-4e96c65f8c46/tables/52c01dbe-5e9f-4633-8806-4dbe4269a2f6                                                                                                                                                                                                                                              |                                                                                                                                 |
 |Provider                    |delta                                                                                                                                                                                                                                                                                                                                                                                                                             |                                                                                                                                 |
 |Owner                       |sixuan.he@databricks.com                                                                                                                                                                                                                                                                                                                                                                                                          |                                                                                                                                 |
 |Is_managed_location         |true                                                                                                                                                                                                                                                                                                                                                                                                                              |                                                                                                                                 |
 |Predictive Optimization     |ENABLE (inherited from METASTORE metastore_aws_us_east_1)                                                                                                                                                                                                                                                                                                                                                                         |                                                                                                                                 |
-|Table Properties            |[delta.enableDeletionVectors=true,delta.feature.appendOnly=supported,delta.feature.deletionVectors=supported,delta.feature.invariants=supported,delta.minReaderVersion=3,delta.minWriterVersion=7,delta.parquet.compression.codec=zstd,io.unitycatalog.tableId=5fee9cd8-3449-4534-8a2a-0ffc3bb93bc6]                                                                                                                              |                                                                                                                                 |
+|Table Properties            |[delta.enableDeletionVectors=true,delta.feature.appendOnly=supported,delta.feature.deletionVectors=supported,delta.feature.invariants=supported,delta.minReaderVersion=3,delta.minWriterVersion=7,delta.parquet.compression.codec=zstd,io.unitycatalog.tableId=52c01dbe-5e9f-4633-8806-4dbe4269a2f6]                                                                                                                              |                                                                                                                                 |
 |                            |                                                                                                                                                                                                                                                                                                                                                                                                                                  |                                                                                                                                 |
 |# Constraints               |                                                                                                                                                                                                                                                                                                                                                                                                                                  |                                                                                                                                 |
-|demand_features_weekly_pk   |PRIMARY KEY (`sku_id`, `retailer_code`, `week_end_date` TIMESERIES)                                                                                                                                                                                                                                                                                                                                                               |                                                                                                                                 |
+|demand_features_weekly_pk   |PRIMARY KEY (`sku_id`, `retailer_code`, `week_end_date`)                                                                                                                                                                                                                                                                                                                                                                          |                                                                                                                                 |
 +----------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------+
 ```
 
@@ -458,16 +461,16 @@ train subsample fraction 0.470 (hash cutoff 4696/10000) -> 998,991 rows
 
 ## 5. Build the training set through a FeatureLookup
 
-This is the point-in-time join: the label frame carries only keys, the horizon
-and the target, and every feature is resolved from the Feature Engineering table
-at the **origin** week.
+The label frame carries only keys, the origin week, the horizon and the target,
+and every feature is resolved from the Feature Engineering table at the
+**origin** week. `lookup_key` is positional against the table's primary key, so
+`origin_week` is matched to `week_end_date`.
 
 ```python
 lookups = [
     FeatureLookup(
         table_name=config.FEATURE_TABLE,
-        lookup_key=["sku_id", "retailer_code"],
-        timestamp_lookup_key="origin_week",
+        lookup_key=["sku_id", "retailer_code", "origin_week"],
     )
 ]
 
@@ -500,10 +503,10 @@ train (998991, 38)  val (39069, 38)  test (50574, 38)
 columns: ['sku_id', 'retailer_code', 'origin_week', 'horizon', 'lag_1', 'lag_2', 'lag_3', 'lag_4', 'lag_8', 'lag_13', 'roll_mean_4', 'roll_mean_8', 'roll_mean_13', 'roll_std_8', 'roll_max_8', 'ratio_4_13', 'cv_8', 'promo_rate_8', 'stockout_rate_8', 'censoring_8', 'weeks_since_launch', 'weeks_of_history', 'life_fraction', 'week_of_year', 'sin_woy', 'cos_woy', 'weeks_to_q4_peak', 'case_pack', 'wholesale_price_usd', 'gross_margin_pct', 'planned_lifespan_weeks', 'contractual_fill_commitment', 'brand', 'category', 'license_family', 'lifecycle_stage', 'channel', 'target_units']
 
 train head:
-      sku_id retailer_code origin_week  horizon  lag_1  lag_2  lag_3  lag_4  lag_8  lag_13  roll_mean_4  roll_mean_8  roll_mean_13  roll_std_8  roll_max_8  ratio_4_13  cv_8  promo_rate_8  stockout_rate_8  censoring_8  weeks_since_launch  weeks_of_history  life_fraction  week_of_year   sin_woy   cos_woy  weeks_to_q4_peak  case_pack  wholesale_price_usd  gross_margin_pct  planned_lifespan_weeks  contractual_fill_commitment        brand category license_family lifecycle_stage channel  target_units
-0  SKU-00003        MASS_A  2023-11-11        3    NaN    NaN    NaN    NaN    NaN     NaN         27.0         27.0          27.0         NaN          27         1.0   NaN           0.0              0.0          0.0                 0.0                 1            0.0            45 -0.748511  0.663123                 2          8                11.02            0.3439                     256                         0.97  Snugglewick    PLUSH      EVERGREEN          MATURE    MASS           119
-1  SKU-00003        MASS_A  2023-11-11        7    NaN    NaN    NaN    NaN    NaN     NaN         27.0         27.0          27.0         NaN          27         1.0   NaN           0.0              0.0          0.0                 0.0                 1            0.0            45 -0.748511  0.663123                 2          8                11.02            0.3439                     256                         0.97  Snugglewick    PLUSH      EVERGREEN          MATURE    MASS           105
-2  SKU-00003        MASS_A  2023-11-11        8    NaN    NaN    NaN    NaN    NaN     NaN         27.0         27.0          27.0         NaN          27         1.0   NaN           0.0              0.0          0.0                 0.0                 1            0.0            45 -0.748511  0.663123                 2          8                11.02            0.3439                     256                         0.97  Snugglewick    PLUSH      EVERGREEN          MATURE    MASS            34
+      sku_id retailer_code origin_week  horizon  lag_1  lag_2  lag_3  lag_4  lag_8  lag_13  roll_mean_4  roll_mean_8  roll_mean_13  roll_std_8  roll_max_8  ratio_4_13  cv_8  promo_rate_8  stockout_rate_8  censoring_8  weeks_since_launch  weeks_of_history  life_fraction  week_of_year   sin_woy   cos_woy  weeks_to_q4_peak  case_pack  wholesale_price_usd  gross_margin_pct  planned_lifespan_weeks  contractual_fill_commitment        brand       category license_family lifecycle_stage channel  target_units
+0  SKU-00001       ETAIL_C  2023-10-07        4    NaN    NaN    NaN    NaN    NaN     NaN         51.0         51.0          51.0         NaN          51         1.0   NaN           0.0              1.0     0.058824                 0.0                 1            0.0            40 -0.992709  0.120537                 7          6                15.49            0.4061                     206                         0.93  Titan Squad  ACTION_FIGURE      EVERGREEN          MATURE   ETAIL           136
+1  SKU-00001       ETAIL_C  2023-10-07        6    NaN    NaN    NaN    NaN    NaN     NaN         51.0         51.0          51.0         NaN          51         1.0   NaN           0.0              1.0     0.058824                 0.0                 1            0.0            40 -0.992709  0.120537                 7          6                15.49            0.4061                     206                         0.93  Titan Squad  ACTION_FIGURE      EVERGREEN          MATURE   ETAIL           179
+2  SKU-00001       ETAIL_C  2023-10-07        7    NaN    NaN    NaN    NaN    NaN     NaN         51.0         51.0          51.0         NaN          51         1.0   NaN           0.0              1.0     0.058824                 0.0                 1            0.0            40 -0.992709  0.120537                 7          6                15.49            0.4061                     206                         0.93  Titan Squad  ACTION_FIGURE      EVERGREEN          MATURE   ETAIL           187
 ```
 
 ## 6. Prepare matrices
@@ -517,19 +520,18 @@ given a fair representation of the same information.
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
-# Calendar features for the week being PREDICTED, derived from the origin week
-# plus the horizon.
+# Calendar features for the week being PREDICTED are derived from the origin week
+# plus the horizon. They are not optional: the holdout stands at a single forecast
+# origin, so every origin-based calendar feature is *constant* across all 50,574
+# test rows, and without target-week features the model cannot tell a July target
+# from a late-September one except through `horizon`. The forward calendar is known
+# at forecast time, so using it is not leakage.
 #
-# These are not optional, and leaving them out is what made the first run of this
-# sweep useless. The holdout stands at a single forecast origin, so every
-# origin-based calendar feature is *constant* across all 50,574 test rows; the
-# model then has no way to distinguish a July target week from a late-September
-# one except through `horizon`. The boosting models duly over-predicted the whole
-# holdout by 62-106% and finished below a 13-week trailing mean.
-#
-# The forward calendar is known at forecast time -- you always know what week you
-# are forecasting into -- so using it is not leakage.
-TARGET_CAL = ["tgt_week_of_year", "tgt_sin_woy", "tgt_cos_woy", "tgt_weeks_to_q4_peak"]
+# The matrix construction lives in `forecasting.pyfunc_model.build_matrix` and is
+# the SAME function the registered model runs at inference. That is what makes
+# `fe.score_batch` and the serving endpoint safe: there is one implementation, so
+# training and serving cannot drift.
+from forecasting.pyfunc_model import TARGET_CAL, build_matrix  # noqa: E402
 
 # `retailer_code` is supplied by the label frame rather than the feature table
 MODEL_FEATURES = ["horizon", "retailer_code", *FEATURE_COLS, *TARGET_CAL]
@@ -538,22 +540,8 @@ ORIGIN_COL = "origin_week"
 
 
 def prep(df: pd.DataFrame) -> tuple[pd.DataFrame, np.ndarray]:
-    d = df.copy()
-    origin = pd.to_datetime(d[ORIGIN_COL])
-    target_week = origin + pd.to_timedelta(d["horizon"].astype(int) * 7, unit="D")
-    woy = target_week.dt.isocalendar().week.astype("float32").to_numpy()
-    d["tgt_week_of_year"] = woy
-    d["tgt_sin_woy"] = np.sin(2 * np.pi * woy / 52.0)
-    d["tgt_cos_woy"] = np.cos(2 * np.pi * woy / 52.0)
-    d["tgt_weeks_to_q4_peak"] = np.minimum(np.abs(woy - 47.0), 52.0 - np.abs(woy - 47.0))
-
-    X = d[MODEL_FEATURES].copy()
-    for c in CATEGORICAL:
-        X[c] = X[c].astype("category")
-    for c in X.columns:
-        if c not in CATEGORICAL:
-            X[c] = pd.to_numeric(X[c], errors="coerce").astype("float32")
-    y = d["target_units"].astype("float64").to_numpy()
+    X = build_matrix(df, MODEL_FEATURES, CATEGORICAL)
+    y = df["target_units"].astype("float64").to_numpy()
     return X, y
 
 
@@ -863,27 +851,27 @@ print("\nsweep complete")
 _Output:_
 
 ```text
-sweep_id: 20261009T202120Z
-seasonal_naive     baseline           WAPE   95.34  bias   20.24  pinball90  16.477  cov  89.6%     0.6s
-🏃 View run seasonal_naive at: https://fevm-stable-classic-pqjg18.cloud.databricks.com/ml/experiments/4347060009219469/runs/558bf29ad98e44888a01fb1e152b9f9d
+sweep_id: 20261015T183410Z
+seasonal_naive     baseline           WAPE   95.34  bias   20.24  pinball90  16.477  cov  89.6%     0.7s
+🏃 View run seasonal_naive at: https://fevm-stable-classic-pqjg18.cloud.databricks.com/ml/experiments/4347060009219469/runs/8a6456aae5a3403e8ec369f2efb14bc2
 🧪 View experiment at: https://fevm-stable-classic-pqjg18.cloud.databricks.com/ml/experiments/4347060009219469
 trailing_mean_13   statistical        WAPE   96.72  bias   16.47  pinball90  15.101  cov  91.2%     0.4s
-🏃 View run trailing_mean_13 at: https://fevm-stable-classic-pqjg18.cloud.databricks.com/ml/experiments/4347060009219469/runs/3d50b737a50a4ad28beb39006fed2a59
+🏃 View run trailing_mean_13 at: https://fevm-stable-classic-pqjg18.cloud.databricks.com/ml/experiments/4347060009219469/runs/4cfade5323f64340968fc6575e997b9c
 🧪 View experiment at: https://fevm-stable-classic-pqjg18.cloud.databricks.com/ml/experiments/4347060009219469
-ridge_linear       linear             WAPE   91.67  bias   31.89  pinball90  18.144  cov  85.3%    12.9s
-🏃 View run ridge_linear at: https://fevm-stable-classic-pqjg18.cloud.databricks.com/ml/experiments/4347060009219469/runs/1890c13e7293446f81dd140bfac90dfb
+ridge_linear       linear             WAPE   91.67  bias   31.89  pinball90  18.144  cov  85.3%    12.4s
+🏃 View run ridge_linear at: https://fevm-stable-classic-pqjg18.cloud.databricks.com/ml/experiments/4347060009219469/runs/ba4a53bf59294a9588e4c5858bd7670e
 🧪 View experiment at: https://fevm-stable-classic-pqjg18.cloud.databricks.com/ml/experiments/4347060009219469
-random_forest      sklearn_ensemble   WAPE   90.64  bias   32.15  pinball90  10.635  cov  91.5%   146.2s
-🏃 View run random_forest at: https://fevm-stable-classic-pqjg18.cloud.databricks.com/ml/experiments/4347060009219469/runs/11b90f25c54543e8ac27ee22a6ca5e2a
+random_forest      sklearn_ensemble   WAPE   93.28  bias   34.98  pinball90  10.744  cov  91.6%   143.6s
+🏃 View run random_forest at: https://fevm-stable-classic-pqjg18.cloud.databricks.com/ml/experiments/4347060009219469/runs/fe029c5e0b1f493e97fc88e3de3fbbe2
 🧪 View experiment at: https://fevm-stable-classic-pqjg18.cloud.databricks.com/ml/experiments/4347060009219469
-sklearn_hist_gbm   sklearn_boosting   WAPE   92.99  bias   26.63  pinball90  11.324  cov  90.8%    26.1s
-🏃 View run sklearn_hist_gbm at: https://fevm-stable-classic-pqjg18.cloud.databricks.com/ml/experiments/4347060009219469/runs/2a5fc893c1334b06bce1352350d25e79
+sklearn_hist_gbm   sklearn_boosting   WAPE  138.68  bias   71.50  pinball90  14.158  cov  90.7%    26.4s
+🏃 View run sklearn_hist_gbm at: https://fevm-stable-classic-pqjg18.cloud.databricks.com/ml/experiments/4347060009219469/runs/9f3e32966e624416b837a73ef14073ab
 🧪 View experiment at: https://fevm-stable-classic-pqjg18.cloud.databricks.com/ml/experiments/4347060009219469
-lightgbm           gradient_boosting  WAPE   67.36  bias    5.22  pinball90   9.526  cov  90.0%    43.3s
-🏃 View run lightgbm at: https://fevm-stable-classic-pqjg18.cloud.databricks.com/ml/experiments/4347060009219469/runs/b538cea89e7c4c768c28da6650d8ed72
+lightgbm           gradient_boosting  WAPE   67.42  bias    4.01  pinball90   9.613  cov  89.8%    51.9s
+🏃 View run lightgbm at: https://fevm-stable-classic-pqjg18.cloud.databricks.com/ml/experiments/4347060009219469/runs/d76f7f2cf35549d59323e8d2b802741c
 🧪 View experiment at: https://fevm-stable-classic-pqjg18.cloud.databricks.com/ml/experiments/4347060009219469
-xgboost            gradient_boosting  WAPE   72.88  bias   11.16  pinball90   9.809  cov  89.2%    75.7s
-🏃 View run xgboost at: https://fevm-stable-classic-pqjg18.cloud.databricks.com/ml/experiments/4347060009219469/runs/8ac9704203a8443aa19df6a888dc88ed
+xgboost            gradient_boosting  WAPE   72.39  bias    9.40  pinball90   9.916  cov  88.9%    80.5s
+🏃 View run xgboost at: https://fevm-stable-classic-pqjg18.cloud.databricks.com/ml/experiments/4347060009219469/runs/b6bc59817ee741efaded55c38df265bc
 🧪 View experiment at: https://fevm-stable-classic-pqjg18.cloud.databricks.com/ml/experiments/4347060009219469
 
 sweep complete
@@ -944,18 +932,18 @@ experiment_id    : 4347060009219469
 runs             : 7 across 6 families
 
  rank        algorithm            family  wape_pct  mape_nonzero_pct  bias_pct    rmse  pinball_p50  pinball_p90  p90_coverage_pct  train_seconds                           run_id
-    1         lightgbm gradient_boosting    67.360           183.373     5.224  93.215       11.310        9.526            89.951           43.3 b538cea89e7c4c768c28da6650d8ed72
-    2          xgboost gradient_boosting    72.883           206.873    11.159  98.517       12.237        9.809            89.245           75.7 8ac9704203a8443aa19df6a888dc88ed
-    3    random_forest  sklearn_ensemble    90.640           291.367    32.146 112.641       15.219       10.635            91.547          146.2 11b90f25c54543e8ac27ee22a6ca5e2a
-    4     ridge_linear            linear    91.665           406.062    31.890  96.371       15.391       18.144            85.317           12.9 1890c13e7293446f81dd140bfac90dfb
-    5 sklearn_hist_gbm  sklearn_boosting    92.993           259.888    26.633 270.228       15.614       11.324            90.762           26.1 2a5fc893c1334b06bce1352350d25e79
-    6   seasonal_naive          baseline    95.342           269.200    20.241 119.124       16.008       16.477            89.629            0.6 558bf29ad98e44888a01fb1e152b9f9d
-    7 trailing_mean_13       statistical    96.724           258.484    16.466 114.866       16.240       15.101            91.173            0.4 3d50b737a50a4ad28beb39006fed2a59
+    1         lightgbm gradient_boosting    67.419           176.793     4.007 102.629       11.320        9.613            89.837           51.9 d76f7f2cf35549d59323e8d2b802741c
+    2          xgboost gradient_boosting    72.386           194.987     9.401  98.937       12.154        9.916            88.917           80.5 b6bc59817ee741efaded55c38df265bc
+    3     ridge_linear            linear    91.665           406.062    31.890  96.371       15.391       18.144            85.317           12.4 ba4a53bf59294a9588e4c5858bd7670e
+    4    random_forest  sklearn_ensemble    93.282           320.046    34.981 113.766       15.662       10.744            91.608          143.6 fe029c5e0b1f493e97fc88e3de3fbbe2
+    5   seasonal_naive          baseline    95.342           269.200    20.241 119.124       16.008       16.477            89.629            0.7 8a6456aae5a3403e8ec369f2efb14bc2
+    6 trailing_mean_13       statistical    96.724           258.484    16.466 114.866       16.240       15.101            91.173            0.4 4cfade5323f64340968fc6575e997b9c
+    7 sklearn_hist_gbm  sklearn_boosting   138.684           301.994    71.503 306.437       23.285       14.158            90.689           26.4 9f3e32966e624416b837a73ef14073ab
 
 wrote forecast_leaderboard.csv
 
-champion  : lightgbm  (WAPE 67.36%)
-challenger: xgboost  (WAPE 72.883%)
+champion  : lightgbm  (WAPE 67.419%)
+challenger: xgboost  (WAPE 72.386%)
 baseline  : seasonal_naive WAPE 95.342%
 ```
 
@@ -1009,13 +997,13 @@ print(f"\nselected p90 method: "
 _Output:_
 
 ```text
-🏃 View run lightgbm_quantile_p90 at: https://fevm-stable-classic-pqjg18.cloud.databricks.com/ml/experiments/4347060009219469/runs/e281eb70c13e44dea1852c9e90d7afc6
+🏃 View run lightgbm_quantile_p90 at: https://fevm-stable-classic-pqjg18.cloud.databricks.com/ml/experiments/4347060009219469/runs/3d0c1276fb0d42ad94897598a0007338
 🧪 View experiment at: https://fevm-stable-classic-pqjg18.cloud.databricks.com/ml/experiments/4347060009219469
 p90 method comparison on the holdout (target coverage 90%):
 
               p90_method  pinball_p90  coverage_pct  mean_p90
-  derived_residual_ratio       9.5261         89.95      56.5
-native_lightgbm_quantile       9.7005         89.61      74.8
+  derived_residual_ratio       9.6127         89.84      56.0
+native_lightgbm_quantile      10.1757         88.66      70.8
 
 selected p90 method: derived_residual_ratio
 ```
@@ -1084,111 +1072,245 @@ _Output:_
 by horizon:
 
  horizon  wape_pct  bias_pct  rows  actual_units
-       1     36.66      6.14  3941        151551
-       2     44.53      1.50  3941        152495
-       3     54.17      0.33  3940        153318
-       4     63.12     -0.34  3938        152787
-       5     70.32     -1.94  3938        148362
-       6     76.19     -0.25  3936        142875
-       7     76.05      1.36  3931        130683
-       8     78.58      5.28  3919        121495
-       9     79.28      9.27  3909        113349
-      10     80.29     10.19  3898        110499
-      11     80.65     15.52  3867        105812
-      12     79.42     15.83  3807        105150
-      13     77.82     15.79  3609        109927
+       1     39.30      5.90  3941        151551
+       2     46.55      2.14  3941        152495
+       3     56.49      2.55  3940        153318
+       4     63.79      0.10  3938        152787
+       5     71.53     -0.27  3938        148362
+       6     76.15     -0.88  3936        142875
+       7     75.43     -0.10  3931        130683
+       8     76.56      1.35  3919        121495
+       9     78.10      5.64  3909        113349
+      10     78.33      5.53  3898        110499
+      11     78.70     11.06  3867        105812
+      12     76.70     10.87  3807        105150
+      13     77.18     14.84  3609        109927
 
 by licence family:
 
 license_family  wape_pct  bias_pct  rows  actual_units
-     EVERGREEN     20.54      1.19 26742        547171
-   FILM_TIE_IN     55.62     36.05 14383        433632
-  SOCIAL_TREND    110.16    -10.33  9449        717500
+     EVERGREEN     20.41      1.20 26742        547171
+   FILM_TIE_IN     56.41     34.64 14383        433632
+  SOCIAL_TREND    109.92    -12.37  9449        717500
 
 by lifecycle stage:
 
 lifecycle_stage  wape_pct  bias_pct  rows  actual_units
-        DECLINE    103.71     46.63 13018        262068
-            EOL    167.50    146.86  5344         47194
-         GROWTH     35.67     15.69  8787        339028
-         MATURE     64.02    -14.86 23425       1050013
+        DECLINE    103.76     47.00 13018        262068
+            EOL    185.55    164.57  5344         47194
+         GROWTH     35.80     15.27  8787        339028
+         MATURE     63.25    -17.58 23425       1050013
 
 lift over the baseline:
 
  champion_wape_pct  seasonal_naive_wape_pct  wape_points_better  relative_improvement_pct
-             67.36                    95.34               27.98                      29.3
+             67.42                    95.34               27.92                      29.3
 ```
 
 ## 12. Register champion and challenger in Unity Catalog
 
-Both the winner and the runner-up are logged through
-`FeatureEngineeringClient.log_model`, so the model carries its `FeatureLookup`
-spec with it. That matters for two reasons: the lineage from
-`gold.fct_demand_weekly` through `ml.demand_features_weekly` into the model is
-visible in Unity Catalog, and inference can resolve features by key instead of
-requiring the caller to rebuild 35 columns correctly.
+**What gets registered is not the bare estimator.** The estimators were trained on
+a matrix built by `build_matrix` (target-week calendar columns, pinned category
+levels), and p90 comes from a second model or a residual table. Logged bare, the
+registered model could neither be batch-scored from keys nor served: it needed the
+caller to rebuild that matrix, and it could only ever return p50. So each version
+is a `DemandForecaster` pyfunc that carries `build_matrix`, the p50 estimator and
+the p90 method inside it: **keys + features in, `forecast_p50` and `forecast_p90`
+out.**
 
-They become two **versions of one registered model**, distinguished by alias.
-`@champion` is what the app and the agent read; `@challenger` is what the next
+That wrapper is registered twice, from the same fitted objects:
+
+* `ml.demand_forecaster` goes through `FeatureEngineeringClient.log_model`, so it
+  carries its `FeatureLookup` spec. Lineage from `gold.fct_demand_weekly` through
+  `ml.demand_features_weekly` into the model is visible in Unity Catalog, and
+  `fe.score_batch` joins features by key (section 13) rather than rebuilding 35
+  columns by hand.
+* `ml.demand_forecaster_rt` is the identical model logged as a plain pyfunc with a
+  signature. A feature-store-backed model cannot be deployed to Model Serving here:
+  the endpoint tries to set up an online feature store and fails with "Online
+  feature store setup failed", and this build deliberately has no online store.
+  The real-time caller supplies the feature row itself (the app reads it from
+  Lakebase), so no serving-time lookup is needed.
+
+In both, `@champion` is what consumers read and `@challenger` is what the next
 evaluation promotes or discards. No consumer hardcodes a version number.
 
 ```python
+import cloudpickle  # noqa: E402
+import sklearn  # noqa: E402
+from mlflow.models import infer_signature  # noqa: E402
+
+from forecasting.pyfunc_model import DemandForecaster  # noqa: E402
+
 champ_name = CHAMPION
 chal_name = CHALLENGER
 champ_obj, champ_q90_tbl = fitted[champ_name]
 chal_obj, chal_q90_tbl = fitted[chal_name]
 
-registered: dict[str, int] = {}
+# Category levels exactly as the estimators saw them (aligned across splits in
+# section 6). Pinning them is what stops LightGBM mis-splitting on a request that
+# happens to contain only some of the levels.
+LEVELS = {c: [str(v) for v in X_train[c].cat.categories] for c in CATEGORICAL}
 
-for role, algo, model_obj in (
-    ("champion", champ_name, champ_obj),
-    ("challenger", chal_name, chal_obj),
-):
-    with mlflow.start_run(run_name=f"register_{role}_{algo}") as rr:
-        mlflow.set_tags({
-            "sweep_id": SWEEP_ID, "stage": "C1_register", "role": role,
-            "algorithm": algo, "data": "synthetic",
-        })
-        fe.log_model(
-            model=model_obj,
-            artifact_path="model",
-            flavor=mlflow.sklearn,
-            training_set=ts_train,
-            registered_model_name=config.MODEL_NAME,
-        )
-    client = mlflow.MlflowClient()
-    versions = client.search_model_versions(f"name='{config.MODEL_NAME}'")
-    newest = max(int(v.version) for v in versions)
-    registered[role] = newest
-    client.set_registered_model_alias(config.MODEL_NAME, role, newest)
-    client.set_model_version_tag(config.MODEL_NAME, str(newest), "algorithm", algo)
-    client.set_model_version_tag(config.MODEL_NAME, str(newest), "sweep_id", SWEEP_ID)
+REQUIREMENTS = [
+    f"mlflow=={mlflow.__version__}",
+    f"lightgbm=={lgb.__version__}",
+    f"xgboost=={xgb.__version__}",
+    f"scikit-learn=={sklearn.__version__}",
+    # NOT `pd.__version__`. This training runtime ships pandas 1.5.3, which has no
+    # Python 3.12 wheel, so the serving image tried to compile it from source and
+    # the container build failed (`No module named 'pkg_resources'`). The first
+    # real-time deploy died on exactly this. 2.2.3 has a wheel, and the wrapper
+    # uses only basic DataFrame operations that behave identically across 1.5/2.x;
+    # the validation cell below proves it rather than assuming it.
+    "pandas==2.2.3",
+    f"numpy=={np.__version__}",
+    f"cloudpickle=={cloudpickle.__version__}",
+]
+CODE_PATHS = [WS + "/src/forecasting"]
+
+# one realistic request row, for the signature and for pre-deploy validation
+example_in = pdf_test.drop(columns=["target_units"]).head(5).copy()
+example_in["origin_week"] = pd.to_datetime(example_in["origin_week"]).dt.strftime("%Y-%m-%d")
+example_in["horizon"] = example_in["horizon"].astype("int64")
+for c in example_in.columns:
+    if c not in CATEGORICAL and c not in ("sku_id", "origin_week", "horizon"):
+        example_in[c] = pd.to_numeric(example_in[c], errors="coerce").astype("float64")
+
+registered: dict[str, int] = {}
+registered_rt: dict[str, int] = {}
+client = mlflow.MlflowClient()
+
+
+def newest_version(name: str) -> int:
+    return max(int(v.version) for v in client.search_model_versions(f"name='{name}'"))
+
+
+def tag_version(name: str, ver: int, algo: str) -> None:
+    client.set_model_version_tag(name, str(ver), "algorithm", algo)
+    client.set_model_version_tag(name, str(ver), "sweep_id", SWEEP_ID)
     client.set_model_version_tag(
-        config.MODEL_NAME, str(newest), "holdout_wape_pct",
+        name, str(ver), "holdout_wape_pct",
         str(round(float(lb[lb.algorithm == algo].wape_pct.iloc[0]), 3)),
     )
-    print(f"{role:11} -> {config.MODEL_NAME} v{newest}  ({algo})")
+
+
+for role, algo, model_obj, q90_tbl in (
+    ("champion", champ_name, champ_obj, champ_q90_tbl),
+    ("challenger", chal_name, chal_obj, chal_q90_tbl),
+):
+    # The native quantile model exists for the champion only (section 10), and is
+    # used only if it won the calibration comparison. Every other version applies
+    # its own per-horizon residual-ratio table.
+    native = q_model if (role == "champion" and algo == CHAMPION and USE_NATIVE_P90) else None
+    wrapper = DemandForecaster(
+        p50_model=model_obj,
+        model_features=MODEL_FEATURES,
+        categorical=CATEGORICAL,
+        levels=LEVELS,
+        p90_model=native,
+        q90_table=q90_tbl,
+    )
+    example_out = wrapper.predict(None, example_in)
+    sig = infer_signature(example_in, example_out)
+
+    tags = {
+        "sweep_id": SWEEP_ID, "stage": "C1_register", "role": role,
+        "algorithm": algo, "p90_method": wrapper.p90_method, "data": "synthetic",
+    }
+    # feature-store-backed version, for fe.score_batch
+    with mlflow.start_run(run_name=f"register_{role}_{algo}"):
+        mlflow.set_tags(tags)
+        fe.log_model(
+            model=wrapper,
+            artifact_path="model",
+            flavor=mlflow.pyfunc,
+            training_set=ts_train,
+            registered_model_name=config.MODEL_NAME,
+            pip_requirements=REQUIREMENTS,
+            code_paths=CODE_PATHS,
+        )
+    registered[role] = newest_version(config.MODEL_NAME)
+    client.set_registered_model_alias(config.MODEL_NAME, role, registered[role])
+    tag_version(config.MODEL_NAME, registered[role], algo)
+
+    # plain-pyfunc twin, for the real-time endpoint
+    with mlflow.start_run(run_name=f"register_{role}_{algo}_rt"):
+        mlflow.set_tags({**tags, "variant": "realtime"})
+        mlflow.pyfunc.log_model(
+            artifact_path="model",
+            python_model=wrapper,
+            signature=sig,
+            input_example=example_in,
+            pip_requirements=REQUIREMENTS,
+            code_paths=CODE_PATHS,
+            registered_model_name=config.MODEL_NAME_RT,
+        )
+    registered_rt[role] = newest_version(config.MODEL_NAME_RT)
+    client.set_registered_model_alias(config.MODEL_NAME_RT, role, registered_rt[role])
+    tag_version(config.MODEL_NAME_RT, registered_rt[role], algo)
+    print(f"{role:11} -> {config.MODEL_NAME} v{registered[role]} (feature-backed)  |  "
+          f"{config.MODEL_NAME_RT} v{registered_rt[role]} (real-time)  "
+          f"[{algo}, p90={wrapper.p90_method}]")
 ```
 
 _Output:_
 
 ```text
-2026/10/09 20:27:32 INFO mlflow.utils.databricks_utils: No workspace ID specified; if your Databricks workspaces share the same host URL, you may want to specify the workspace ID (along with the host information in the secret manager) for run lineage tracking. For more details on how to specify this information in the secret manager, please refer to the Databricks MLflow documentation.
+/databricks/python/lib/python3.12/site-packages/mlflow/types/utils.py:452: UserWarning: Hint: Inferred schema contains integer column(s). Integer columns in Python cannot represent missing values. If your input data contains missing values at inference time, it will be encoded as floats and will cause a schema enforcement error. The best way to avoid this problem is to infer the model schema based on a realistic data sample (training dataset) that includes missing values. Alternatively, you can declare integer columns as doubles (float64) whenever these columns may have missing values. See `Handling Integers With Missing Values <https://www.mlflow.org/docs/latest/models.html#handling-integers-with-missing-values>`_ for more details.
+  warnings.warn(
+2026/10/15 18:40:35 WARNING mlflow.pyfunc: Failed to infer model signature: Type hint <input: <class 'pandas.core.frame.DataFrame'>, output: <class 'pandas.core.frame.DataFrame'>> cannot be used to infer model signature and input example is not provided, model signature cannot be inferred.
+2026/10/15 18:40:36 WARNING mlflow.utils.requirements_utils: Detected one or more mismatches between the model's dependencies and the current Python environment:
+ - pandas (current: 1.5.3, required: pandas==2.2.3)
+To fix the mismatches, call `mlflow.pyfunc.get_model_dependencies(model_uri)` to fetch the model's environment and install dependencies using the resulting environment file.
 /databricks/python/lib/python3.12/site-packages/mlflow/pyfunc/__init__.py:3212: UserWarning: An input example was not provided when logging the model. To ensure the model signature functions correctly, specify the `input_example` parameter. See https://mlflow.org/docs/latest/model/signatures.html#model-input-example for more details about the benefits of using input_example.
   color_warning(
+2026/10/15 18:40:36 WARNING mlflow.utils.requirements_utils: Detected one or more mismatches between the model's dependencies and the current Python environment:
+ - pandas (current: 1.5.3, required: pandas==2.2.3)
+To fix the mismatches, call `mlflow.pyfunc.get_model_dependencies(model_uri)` to fetch the model's environment and install dependencies using the resulting environment file.
 Registered model 'toy_demand_allocation.ml.demand_forecaster' already exists. Creating a new version of this model...
-Created version '9' of model 'toy_demand_allocation.ml.demand_forecaster'.
-🏃 View run register_champion_lightgbm at: https://fevm-stable-classic-pqjg18.cloud.databricks.com/ml/experiments/4347060009219469/runs/71e170aa1ae7404189a3e31807b054e6
+Created version '13' of model 'toy_demand_allocation.ml.demand_forecaster'.
+🏃 View run register_champion_lightgbm at: https://fevm-stable-classic-pqjg18.cloud.databricks.com/ml/experiments/4347060009219469/runs/66faa49606d6458a92d9218ad6012337
 🧪 View experiment at: https://fevm-stable-classic-pqjg18.cloud.databricks.com/ml/experiments/4347060009219469
-champion    -> toy_demand_allocation.ml.demand_forecaster v9  (lightgbm)
-2026/10/09 20:27:46 INFO mlflow.utils.databricks_utils: No workspace ID specified; if your Databricks workspaces share the same host URL, you may want to specify the workspace ID (along with the host information in the secret manager) for run lineage tracking. For more details on how to specify this information in the secret manager, please refer to the Databricks MLflow documentation.
+2026/10/15 18:40:45 INFO mlflow.pyfunc: Validating input example against model signature
+2026/10/15 18:40:45 WARNING mlflow.utils.requirements_utils: Detected one or more mismatches between the model's dependencies and the current Python environment:
+ - pandas (current: 1.5.3, required: pandas==2.2.3)
+To fix the mismatches, call `mlflow.pyfunc.get_model_dependencies(model_uri)` to fetch the model's environment and install dependencies using the resulting environment file.
+2026/10/15 18:40:45 WARNING mlflow.utils.requirements_utils: Detected one or more mismatches between the model's dependencies and the current Python environment:
+ - pandas (current: 1.5.3, required: pandas==2.2.3)
+To fix the mismatches, call `mlflow.pyfunc.get_model_dependencies(model_uri)` to fetch the model's environment and install dependencies using the resulting environment file.
+Registered model 'toy_demand_allocation.ml.demand_forecaster_rt' already exists. Creating a new version of this model...
+Created version '3' of model 'toy_demand_allocation.ml.demand_forecaster_rt'.
+🏃 View run register_champion_lightgbm_rt at: https://fevm-stable-classic-pqjg18.cloud.databricks.com/ml/experiments/4347060009219469/runs/40e0ecab2b3a436b9925d548469b754b
+🧪 View experiment at: https://fevm-stable-classic-pqjg18.cloud.databricks.com/ml/experiments/4347060009219469
+champion    -> toy_demand_allocation.ml.demand_forecaster v13 (feature-backed)  |  toy_demand_allocation.ml.demand_forecaster_rt v3 (real-time)  [lightgbm, p90=derived_residual_ratio]
+/databricks/python/lib/python3.12/site-packages/mlflow/types/utils.py:452: UserWarning: Hint: Inferred schema contains integer column(s). Integer columns in Python cannot represent missing values. If your input data contains missing values at inference time, it will be encoded as floats and will cause a schema enforcement error. The best way to avoid this problem is to infer the model schema based on a realistic data sample (training dataset) that includes missing values. Alternatively, you can declare integer columns as doubles (float64) whenever these columns may have missing values. See `Handling Integers With Missing Values <https://www.mlflow.org/docs/latest/models.html#handling-integers-with-missing-values>`_ for more details.
+  warnings.warn(
+2026/10/15 18:40:53 WARNING mlflow.pyfunc: Failed to infer model signature: Type hint <input: <class 'pandas.core.frame.DataFrame'>, output: <class 'pandas.core.frame.DataFrame'>> cannot be used to infer model signature and input example is not provided, model signature cannot be inferred.
+2026/10/15 18:40:53 WARNING mlflow.utils.requirements_utils: Detected one or more mismatches between the model's dependencies and the current Python environment:
+ - pandas (current: 1.5.3, required: pandas==2.2.3)
+To fix the mismatches, call `mlflow.pyfunc.get_model_dependencies(model_uri)` to fetch the model's environment and install dependencies using the resulting environment file.
 /databricks/python/lib/python3.12/site-packages/mlflow/pyfunc/__init__.py:3212: UserWarning: An input example was not provided when logging the model. To ensure the model signature functions correctly, specify the `input_example` parameter. See https://mlflow.org/docs/latest/model/signatures.html#model-input-example for more details about the benefits of using input_example.
   color_warning(
+2026/10/15 18:40:53 WARNING mlflow.utils.requirements_utils: Detected one or more mismatches between the model's dependencies and the current Python environment:
+ - pandas (current: 1.5.3, required: pandas==2.2.3)
+To fix the mismatches, call `mlflow.pyfunc.get_model_dependencies(model_uri)` to fetch the model's environment and install dependencies using the resulting environment file.
 Registered model 'toy_demand_allocation.ml.demand_forecaster' already exists. Creating a new version of this model...
-Created version '10' of model 'toy_demand_allocation.ml.demand_forecaster'.
-🏃 View run register_challenger_xgboost at: https://fevm-stable-classic-pqjg18.cloud.databricks.com/ml/experiments/4347060009219469/runs/1c248f98586e48e7abb63752e98b6fb7
+Created version '14' of model 'toy_demand_allocation.ml.demand_forecaster'.
+🏃 View run register_challenger_xgboost at: https://fevm-stable-classic-pqjg18.cloud.databricks.com/ml/experiments/4347060009219469/runs/2849ddaafa20499bae664c9f44b4db42
 🧪 View experiment at: https://fevm-stable-classic-pqjg18.cloud.databricks.com/ml/experiments/4347060009219469
-challenger  -> toy_demand_allocation.ml.demand_forecaster v10  (xgboost)
+2026/10/15 18:41:01 INFO mlflow.pyfunc: Validating input example against model signature
+2026/10/15 18:41:01 WARNING mlflow.utils.requirements_utils: Detected one or more mismatches between the model's dependencies and the current Python environment:
+ - pandas (current: 1.5.3, required: pandas==2.2.3)
+To fix the mismatches, call `mlflow.pyfunc.get_model_dependencies(model_uri)` to fetch the model's environment and install dependencies using the resulting environment file.
+2026/10/15 18:41:01 WARNING mlflow.utils.requirements_utils: Detected one or more mismatches between the model's dependencies and the current Python environment:
+ - pandas (current: 1.5.3, required: pandas==2.2.3)
+To fix the mismatches, call `mlflow.pyfunc.get_model_dependencies(model_uri)` to fetch the model's environment and install dependencies using the resulting environment file.
+Registered model 'toy_demand_allocation.ml.demand_forecaster_rt' already exists. Creating a new version of this model...
+Created version '4' of model 'toy_demand_allocation.ml.demand_forecaster_rt'.
+🏃 View run register_challenger_xgboost_rt at: https://fevm-stable-classic-pqjg18.cloud.databricks.com/ml/experiments/4347060009219469/runs/88a2c09fc1ea4462899af07aa3fb255b
+🧪 View experiment at: https://fevm-stable-classic-pqjg18.cloud.databricks.com/ml/experiments/4347060009219469
+challenger  -> toy_demand_allocation.ml.demand_forecaster v14 (feature-backed)  |  toy_demand_allocation.ml.demand_forecaster_rt v4 (real-time)  [xgboost, p90=derived_residual_ratio]
 ```
 
 ```python
@@ -1261,89 +1383,182 @@ _Output:_
 registered model: toy_demand_allocation.ml.demand_forecaster
 
  version     aliases algorithm holdout_wape_pct         sweep_id status
-       1           -   xgboost           72.734 20261009T191038Z  READY
-       2           -  lightgbm           78.127 20261009T191038Z  READY
-       3           -  lightgbm           70.858 20261009T192028Z  READY
-       4           -   xgboost           71.406 20261009T192028Z  READY
-       5           -   xgboost           73.474 20261009T195910Z  READY
-       6           -  lightgbm           75.219 20261009T195910Z  READY
-       7           -  lightgbm            67.36 20261009T200836Z  READY
-       8           -   xgboost           72.883 20261009T200836Z  READY
-       9   @champion  lightgbm            67.36 20261009T202120Z  READY
-      10 @challenger   xgboost           72.883 20261009T202120Z  READY
+       9           -  lightgbm            67.36 20261009T202120Z  READY
+      10           -   xgboost           72.883 20261009T202120Z  READY
+      11           -  lightgbm           67.557 20261015T175135Z  READY
+      12           -   xgboost           72.386 20261015T175135Z  READY
+      13   @champion  lightgbm           67.419 20261015T183410Z  READY
+      14 @challenger   xgboost           72.386 20261015T183410Z  READY
 
 Versions accumulate across notebook runs, which is the point of a registry: 
 earlier versions stay auditable and the aliases always resolve to the current sweep.
 
 alias resolution (what every consumer actually loads):
   models:/toy_demand_allocation.ml.demand_forecaster@champion
-      -> version 9, algorithm=lightgbm, holdout WAPE 67.36%
+      -> version 13, algorithm=lightgbm, holdout WAPE 67.419%
   models:/toy_demand_allocation.ml.demand_forecaster@challenger
-      -> version 10, algorithm=xgboost, holdout WAPE 72.883%
+      -> version 14, algorithm=xgboost, holdout WAPE 72.386%
 ```
 
-## 13. Score 13 weeks forward
+### Pre-deploy validation: does the real-time model work in the serving image's environment?
+
+A model that registers cleanly can still fail to deploy, and a failed container
+build costs a long queue wait to discover. So before any endpoint is touched,
+rebuild the environment the serving image will build, from the model's own
+`requirements.txt`, in a fresh Python 3.12 virtualenv, and compare its predictions
+with this notebook's. Same dependencies, none of the training runtime's packages,
+binary wheels only (so an unbuildable pin fails here, as it would in the image).
+
+```python
+import json  # noqa: E402
+import pathlib  # noqa: E402
+import shutil  # noqa: E402
+import subprocess  # noqa: E402
+
+
+def _sh(cmd: str) -> subprocess.CompletedProcess:
+    return subprocess.run(cmd, shell=True, capture_output=True, text=True)
+
+
+work = pathlib.Path("/local_disk0/tmp/rt_validation")
+shutil.rmtree(work, ignore_errors=True)
+work.mkdir(parents=True)
+
+rt_uri = f"models:/{config.MODEL_NAME_RT}@{config.CHAMPION_ALIAS}"
+art = pathlib.Path(mlflow.artifacts.download_artifacts(rt_uri, dst_path=str(work / "model")))
+print("model artifact :", rt_uri)
+print("requirements   :\n  " + "\n  ".join((art / "requirements.txt").read_text().split()))
+
+venv = work / "venv"
+r = _sh(f"python -m pip install -q uv && python -m uv venv {venv} --python /usr/bin/python3.12")
+assert r.returncode == 0, r.stderr[-800:]
+r = _sh(
+    f"python -m uv pip install --python {venv}/bin/python --only-binary :all: "
+    f"-r {art / 'requirements.txt'}"
+)
+assert r.returncode == 0, "requirements do not install on Python 3.12:\n" + r.stderr[-1500:]
+
+(work / "predict.py").write_text(f"""
+import json, pandas as pd, mlflow.pyfunc
+m = mlflow.pyfunc.load_model('{art}')
+ex = json.load(open('{art}/input_example.json'))
+out = m.predict(pd.DataFrame(data=ex['data'], columns=ex['columns']))
+print('RESULT' + json.dumps(out.to_dict(orient='list')))
+""")
+r = _sh(f"cd {work} && {venv}/bin/python predict.py")
+assert r.returncode == 0, r.stderr[-1500:]
+fresh = pd.DataFrame(json.loads(next(
+    ln for ln in r.stdout.splitlines() if ln.startswith("RESULT"))[len("RESULT"):]))
+probe = _sh(
+    f"{venv}/bin/python -c 'import pandas,sys;print(pandas.__version__, sys.version.split()[0])'"
+)
+print(f"\nfresh venv     : pandas / python = {probe.stdout.strip()}")
+print(f"this notebook  : pandas {pd.__version__}")
+mv_rt = client.get_model_version_by_alias(config.MODEL_NAME_RT, config.CHAMPION_ALIAS)
+print(f"rt champion    : {config.MODEL_NAME_RT} v{mv_rt.version}\n")
+
+ex_json = json.loads((art / "input_example.json").read_text())
+expected = mlflow.pyfunc.load_model(rt_uri).predict(
+    pd.DataFrame(ex_json["data"], columns=ex_json["columns"])
+)
+cmp_rt = pd.concat({"serving env": fresh, "this notebook": expected}, axis=1)
+print(cmp_rt.to_string())
+delta = float((fresh.to_numpy() - expected.to_numpy()).__abs__().max())
+print(f"\nmax |difference| = {delta:.6f}")
+assert delta < 0.02, "serving environment disagrees with the training environment"
+print("The serving environment reproduces the training environment's forecasts.")
+```
+
+_Output:_
+
+```text
+model artifact : models:/toy_demand_allocation.ml.demand_forecaster_rt@champion
+requirements   :
+  mlflow==2.21.3
+  lightgbm==4.5.0
+  xgboost==2.0.3
+  scikit-learn==1.4.2
+  pandas==2.2.3
+  numpy==1.26.4
+  cloudpickle==2.2.1
+
+fresh venv     : pandas / python = 2.2.3 3.12.3
+this notebook  : pandas 1.5.3
+rt champion    : toy_demand_allocation.ml.demand_forecaster_rt v3
+
+2026/10/15 18:41:36 WARNING mlflow.utils.requirements_utils: Detected one or more mismatches between the model's dependencies and the current Python environment:
+ - pandas (current: 1.5.3, required: pandas==2.2.3)
+To fix the mismatches, call `mlflow.pyfunc.get_model_dependencies(model_uri)` to fetch the model's environment and install dependencies using the resulting environment file.
+   serving env              this notebook             
+  forecast_p50 forecast_p90  forecast_p50 forecast_p90
+0        43.02        69.10         43.02        69.10
+1        42.39        67.09         42.39        67.09
+2        42.01        64.42         42.01        64.42
+3        40.69        65.33         40.69        65.33
+4        39.43        64.06         39.43        64.06
+
+max |difference| = 0.000000
+The serving environment reproduces the training environment's forecasts.
+```
+
+## 13. Score 13 weeks forward with `fe.score_batch`
 
 Stand at the last actual week and forecast the next 13 at horizons 1-13 in a
 single pass — no recursion, so no error compounding. The window lands squarely
 in the Q4 build, which is exactly when a licensed-toy planner is most exposed.
 
-p90 uses whichever method won the calibration comparison in §10.
+**Scoring takes keys only.** The input frame is `sku_id`, `retailer_code`,
+`origin_week` and `horizon`; `fe.score_batch` resolves all 33 feature columns from
+the model's own registered `FeatureLookup`, and the model itself builds the
+target-week calendar and applies p50 and p90. Nothing about the feature matrix is
+rebuilt by hand here, which is the training/serving skew the feature layer exists
+to prevent. A parity check at the end proves the keys-only path reproduces the
+estimators' own output exactly.
 
 ```python
-origin_feats = (
+origin_keys = (
     spark.table(config.FEATURE_TABLE)
     .filter(F.col("week_end_date") == F.lit(W_LAST))
-    .toPandas()
+    .select("sku_id", "retailer_code", F.col("week_end_date").alias("origin_week"))
 )
-print(f"series with features at origin {W_LAST}: {len(origin_feats):,}")
+score_keys = origin_keys.crossJoin(
+    spark.range(1, H + 1).select(F.col("id").cast("int").alias("horizon"))
+)
+print(f"series with features at origin {W_LAST}: {origin_keys.count():,}")
+print(f"keys to score: {score_keys.count():,}  (columns: {score_keys.columns})")
 
-fwd = origin_feats.loc[origin_feats.index.repeat(H)].copy()
-fwd["horizon"] = np.tile(np.arange(1, H + 1), len(origin_feats))
-fwd["origin_week"] = pd.to_datetime(fwd["week_end_date"])
-fwd["target_units"] = 0.0  # placeholder; prep() needs the column, value unused
-
-X_fwd, _ = prep(fwd)
-p50_fwd = np.clip(champ_obj.predict(X_fwd), 0, None)
-if USE_NATIVE_P90:
-    p90_fwd = np.clip(q_model.predict(X_fwd), 0, None)
-    p90_fwd = np.maximum(p90_fwd, p50_fwd)
-else:
-    p90_fwd = apply_q90(p50_fwd, fwd["horizon"].to_numpy(), champ_q90_tbl)
-
-forecast = pd.DataFrame({
-    "sku_id": fwd["sku_id"].to_numpy(),
-    "retailer_code": fwd["retailer_code"].to_numpy(),
-    "origin_week": fwd["origin_week"].dt.date.to_numpy(),
-    "horizon": fwd["horizon"].to_numpy().astype(int),
-    "forecast_p50": np.round(p50_fwd, 2),
-    "forecast_p90": np.round(p90_fwd, 2),
+champion_uri = f"models:/{config.MODEL_NAME}@{config.CHAMPION_ALIAS}"
+scored = fe.score_batch(
+    model_uri=champion_uri,
+    df=score_keys,
+    result_type="struct<forecast_p50:double,forecast_p90:double>",
+)
+forecast_sdf = scored.select(
+    "sku_id", "retailer_code", "origin_week", "horizon",
+    F.round(F.col("prediction.forecast_p50"), 2).alias("forecast_p50"),
+    F.round(F.col("prediction.forecast_p90"), 2).alias("forecast_p90"),
+).withColumn("week_end_date", F.expr("date_add(origin_week, horizon * 7)")).withColumns({
+    "model_name": F.lit(config.MODEL_NAME),
+    "model_version": F.lit(registered["champion"]),
+    "model_alias": F.lit(config.CHAMPION_ALIAS),
+    "algorithm": F.lit(champ_name),
+    "p90_method": F.lit("native_quantile" if USE_NATIVE_P90 else "derived_residual_ratio"),
 })
-forecast["week_end_date"] = pd.to_datetime(forecast["origin_week"]) + pd.to_timedelta(
-    forecast["horizon"] * 7, unit="D"
-)
-forecast["week_end_date"] = forecast["week_end_date"].dt.date
-forecast["model_name"] = config.MODEL_NAME
-forecast["model_version"] = registered["champion"]
-forecast["model_alias"] = config.CHAMPION_ALIAS
-forecast["algorithm"] = champ_name
-forecast["p90_method"] = "native_quantile" if USE_NATIVE_P90 else "derived_residual_ratio"
-
-print(f"forecast rows: {len(forecast):,}  weeks "
-      f"{forecast.week_end_date.min()} .. {forecast.week_end_date.max()}")
-print(forecast.head(6).to_string(index=False))
-
-sdf = spark.createDataFrame(forecast)
-sdf.write.mode("overwrite").option("overwriteSchema", "true").saveAsTable(
+forecast_sdf.write.mode("overwrite").option("overwriteSchema", "true").saveAsTable(
     config.FCT_DEMAND_FORECAST
 )
 spark.sql(f"""
 COMMENT ON TABLE {config.FCT_DEMAND_FORECAST} IS
 '13-week forward demand forecast at SKU x retailer x week, p50 and p90, produced
-by the @champion version of ml.demand_forecaster from a single forecast origin.
-Consumed by gold.fct_stockout_risk, the allocation agent and the app. SYNTHETIC DATA.'
+by the @champion version of ml.demand_forecaster via fe.score_batch from a single
+forecast origin. Consumed by gold.fct_stockout_risk, the allocation agent and the
+app. SYNTHETIC DATA.'
 """)
-print(f"\nwrote {config.FCT_DEMAND_FORECAST}")
+print(f"\nwrote {config.FCT_DEMAND_FORECAST}  via {champion_uri} (v{registered['champion']})")
+forecast = spark.table(config.FCT_DEMAND_FORECAST).toPandas()
+print(f"forecast rows: {len(forecast):,}  weeks "
+      f"{forecast.week_end_date.min()} .. {forecast.week_end_date.max()}")
+print(forecast.head(6).to_string(index=False))
 spark.sql(f"""
 SELECT week_end_date, COUNT(*) AS series,
        ROUND(SUM(forecast_p50)) AS total_p50, ROUND(SUM(forecast_p90)) AS total_p90
@@ -1355,33 +1570,87 @@ _Output:_
 
 ```text
 series with features at origin 2026-09-26: 4,498
+keys to score: 58,474  (columns: ['sku_id', 'retailer_code', 'origin_week', 'horizon'])
+2026/10/15 18:41:41 WARNING mlflow.utils.requirements_utils: Detected one or more mismatches between the model's dependencies and the current Python environment:
+ - pandas (current: 1.5.3, required: pandas==2.2.3)
+To fix the mismatches, call `mlflow.pyfunc.get_model_dependencies(model_uri)` to fetch the model's environment and install dependencies using the resulting environment file.
+2026/10/15 18:41:41 WARNING mlflow.pyfunc: Calling `spark_udf()` with `env_manager="local"` does not recreate the same environment that was used during training, which may lead to errors or inaccurate predictions. We recommend specifying `env_manager="conda"`, which automatically recreates the environment that was used to train the model and performs inference in the recreated environment.
+2026/10/15 18:41:41 INFO mlflow.models.flavor_backend_registry: Selected backend for flavor 'python_function'
+
+wrote toy_demand_allocation.gold.fct_demand_forecast  via models:/toy_demand_allocation.ml.demand_forecaster@champion (v13)
 forecast rows: 58,474  weeks 2026-10-03 .. 2026-12-26
    sku_id retailer_code origin_week  horizon  forecast_p50  forecast_p90 week_end_date                                 model_name  model_version model_alias algorithm             p90_method
-SKU-00001       ETAIL_C  2026-09-26        1         43.36         69.86    2026-10-03 toy_demand_allocation.ml.demand_forecaster              9    champion  lightgbm derived_residual_ratio
-SKU-00001       ETAIL_C  2026-09-26        2         51.55         81.55    2026-10-10 toy_demand_allocation.ml.demand_forecaster              9    champion  lightgbm derived_residual_ratio
-SKU-00001       ETAIL_C  2026-09-26        3         58.09         88.67    2026-10-17 toy_demand_allocation.ml.demand_forecaster              9    champion  lightgbm derived_residual_ratio
-SKU-00001       ETAIL_C  2026-09-26        4         66.42        105.88    2026-10-24 toy_demand_allocation.ml.demand_forecaster              9    champion  lightgbm derived_residual_ratio
-SKU-00001       ETAIL_C  2026-09-26        5         78.27        126.52    2026-10-31 toy_demand_allocation.ml.demand_forecaster              9    champion  lightgbm derived_residual_ratio
-SKU-00001       ETAIL_C  2026-09-26        6         83.89        134.96    2026-11-07 toy_demand_allocation.ml.demand_forecaster              9    champion  lightgbm derived_residual_ratio
-
-wrote toy_demand_allocation.gold.fct_demand_forecast
+SKU-00261        MASS_B  2026-09-26        1          7.44         11.94    2026-10-03 toy_demand_allocation.ml.demand_forecaster             13    champion  lightgbm derived_residual_ratio
+SKU-00261        MASS_B  2026-09-26        2          8.90         14.09    2026-10-10 toy_demand_allocation.ml.demand_forecaster             13    champion  lightgbm derived_residual_ratio
+SKU-00261        MASS_B  2026-09-26        3         10.13         15.53    2026-10-17 toy_demand_allocation.ml.demand_forecaster             13    champion  lightgbm derived_residual_ratio
+SKU-00261        MASS_B  2026-09-26        4         11.27         18.09    2026-10-24 toy_demand_allocation.ml.demand_forecaster             13    champion  lightgbm derived_residual_ratio
+SKU-00261        MASS_B  2026-09-26        5         12.59         20.45    2026-10-31 toy_demand_allocation.ml.demand_forecaster             13    champion  lightgbm derived_residual_ratio
+SKU-00261        MASS_B  2026-09-26        6         13.62         22.16    2026-11-07 toy_demand_allocation.ml.demand_forecaster             13    champion  lightgbm derived_residual_ratio
 +-------------+------+---------+---------+
 |week_end_date|series|total_p50|total_p90|
 +-------------+------+---------+---------+
-|2026-10-03   |4498  |203574.0 |328011.0 |
-|2026-10-10   |4498  |228621.0 |361667.0 |
-|2026-10-17   |4498  |248159.0 |378796.0 |
-|2026-10-24   |4498  |275656.0 |439380.0 |
-|2026-10-31   |4498  |285384.0 |461311.0 |
-|2026-11-07   |4498  |298409.0 |480052.0 |
-|2026-11-14   |4498  |298833.0 |498995.0 |
-|2026-11-21   |4498  |291680.0 |485198.0 |
-|2026-11-28   |4498  |268334.0 |426690.0 |
-|2026-12-05   |4498  |243731.0 |387938.0 |
-|2026-12-12   |4498  |218756.0 |353265.0 |
-|2026-12-19   |4498  |193369.0 |309146.0 |
-|2026-12-26   |4498  |173006.0 |263046.0 |
+|2026-10-03   |4498  |214327.0 |344252.0 |
+|2026-10-10   |4498  |242887.0 |384409.0 |
+|2026-10-17   |4498  |260854.0 |400022.0 |
+|2026-10-24   |4498  |293837.0 |471830.0 |
+|2026-10-31   |4498  |308786.0 |501658.0 |
+|2026-11-07   |4498  |322579.0 |524827.0 |
+|2026-11-14   |4498  |323268.0 |541872.0 |
+|2026-11-21   |4498  |309294.0 |512438.0 |
+|2026-11-28   |4498  |284603.0 |455326.0 |
+|2026-12-05   |4498  |252889.0 |403727.0 |
+|2026-12-12   |4498  |224350.0 |360904.0 |
+|2026-12-19   |4498  |198911.0 |318257.0 |
+|2026-12-26   |4498  |173929.0 |265616.0 |
 +-------------+------+---------+---------+
+```
+
+### Parity: keys-only `score_batch` vs. the estimators called directly
+
+The old path joined 35 columns by hand and called the estimator. Repeat it on a
+sample of series and require the registered model to reproduce it. Any difference
+would be exactly the skew this section exists to remove.
+
+```python
+sample_keys = (
+    forecast[["sku_id", "retailer_code"]].drop_duplicates().sample(500, random_state=7)
+)
+fwd = (
+    spark.table(config.FEATURE_TABLE).filter(F.col("week_end_date") == F.lit(W_LAST))
+    .toPandas().merge(sample_keys, on=["sku_id", "retailer_code"])
+)
+fwd = fwd.loc[fwd.index.repeat(H)].copy()
+fwd["horizon"] = np.tile(np.arange(1, H + 1), len(fwd) // H)
+fwd["origin_week"] = pd.to_datetime(fwd["week_end_date"])
+
+X_fwd = build_matrix(fwd, MODEL_FEATURES, CATEGORICAL, LEVELS)
+p50_ref = np.clip(champ_obj.predict(X_fwd), 0, None)
+if USE_NATIVE_P90:
+    p90_ref = np.maximum(np.clip(q_model.predict(X_fwd), 0, None), p50_ref)
+else:
+    p90_ref = apply_q90(p50_ref, fwd["horizon"].to_numpy(), champ_q90_tbl)
+ref = pd.DataFrame({
+    "sku_id": fwd["sku_id"].to_numpy(), "retailer_code": fwd["retailer_code"].to_numpy(),
+    "horizon": fwd["horizon"].to_numpy(),
+    "ref_p50": np.round(p50_ref, 2), "ref_p90": np.round(p90_ref, 2),
+})
+cmp = forecast.merge(ref, on=["sku_id", "retailer_code", "horizon"])
+d50 = (cmp.forecast_p50 - cmp.ref_p50).abs().max()
+d90 = (cmp.forecast_p90 - cmp.ref_p90).abs().max()
+print(f"rows compared        : {len(cmp):,}")
+print(f"max |p50 difference| : {d50:.4f}")
+print(f"max |p90 difference| : {d90:.4f}")
+assert len(cmp) == len(ref) and d50 < 0.02 and d90 < 0.02, "score_batch diverges from estimator"
+print("score_batch reproduces the estimator output from keys alone.")
+```
+
+_Output:_
+
+```text
+rows compared        : 6,500
+max |p50 difference| : 0.0000
+max |p90 difference| : 0.0000
+score_batch reproduces the estimator output from keys alone.
 ```
 
 ## 14. Holdout forecast-vs-actual table
@@ -1441,28 +1710,28 @@ _Output:_
 ```text
 wrote toy_demand_allocation.gold.fct_demand_forecast_eval: 50,574 rows
    sku_id retailer_code week_end_date  horizon  actual_units  forecast_p50  forecast_p90       brand license_family lifecycle_stage                                 model_name  model_version model_alias  abs_error
-SKU-00003        MASS_A    2026-07-04        1          66.0         67.29        108.42 Snugglewick      EVERGREEN          MATURE toy_demand_allocation.ml.demand_forecaster              9    champion       1.29
-SKU-00003        MASS_A    2026-07-11        2          64.0         66.00        104.41 Snugglewick      EVERGREEN          MATURE toy_demand_allocation.ml.demand_forecaster              9    champion       2.00
-SKU-00003        MASS_A    2026-07-18        3          69.0         64.34         98.21 Snugglewick      EVERGREEN          MATURE toy_demand_allocation.ml.demand_forecaster              9    champion       4.66
-SKU-00003        MASS_A    2026-07-25        4          61.0         62.68         99.90 Snugglewick      EVERGREEN          MATURE toy_demand_allocation.ml.demand_forecaster              9    champion       1.68
-SKU-00003        MASS_A    2026-08-01        5          62.0         61.16         98.87 Snugglewick      EVERGREEN          MATURE toy_demand_allocation.ml.demand_forecaster              9    champion       0.84
+SKU-00001       ETAIL_C    2026-07-04        1          34.0         43.02         69.10 Titan Squad      EVERGREEN          MATURE toy_demand_allocation.ml.demand_forecaster             13    champion       9.02
+SKU-00001       ETAIL_C    2026-07-11        2          33.0         42.39         67.09 Titan Squad      EVERGREEN          MATURE toy_demand_allocation.ml.demand_forecaster             13    champion       9.39
+SKU-00001       ETAIL_C    2026-07-18        3          38.0         42.01         64.42 Titan Squad      EVERGREEN          MATURE toy_demand_allocation.ml.demand_forecaster             13    champion       4.01
+SKU-00001       ETAIL_C    2026-07-25        4          44.0         40.69         65.33 Titan Squad      EVERGREEN          MATURE toy_demand_allocation.ml.demand_forecaster             13    champion       3.31
+SKU-00001       ETAIL_C    2026-08-01        5          34.0         39.43         64.06 Titan Squad      EVERGREEN          MATURE toy_demand_allocation.ml.demand_forecaster             13    champion       5.43
 
 forecast vs actual, one holdout week, highest-volume series:
 +---------+-------------+-------------+-------+------------+------------+------------+---------+--------------+---------------+
 |sku_id   |retailer_code|week_end_date|horizon|actual_units|forecast_p50|forecast_p90|abs_error|license_family|lifecycle_stage|
 +---------+-------------+-------------+-------+------------+------------+------------+---------+--------------+---------------+
-|SKU-01969|MASS_B       |2026-07-04   |1      |3208.0      |3453.69     |5564.81     |245.69   |FILM_TIE_IN   |MATURE         |
-|SKU-02260|MASS_A       |2026-07-04   |1      |1370.0      |1208.71     |1947.55     |161.29   |SOCIAL_TREND  |DECLINE        |
-|SKU-01062|MASS_B       |2026-07-04   |1      |1201.0      |886.02      |1427.61     |314.98   |FILM_TIE_IN   |MATURE         |
-|SKU-01324|MASS_A       |2026-07-04   |1      |1139.0      |653.1       |1052.32     |485.9    |SOCIAL_TREND  |DECLINE        |
-|SKU-00931|MASS_A       |2026-07-04   |1      |1081.0      |805.72      |1298.23     |275.28   |SOCIAL_TREND  |MATURE         |
-|SKU-00955|MASS_A       |2026-07-04   |1      |1021.0      |372.0       |599.39      |649.0    |SOCIAL_TREND  |DECLINE        |
-|SKU-01101|MASS_A       |2026-07-04   |1      |895.0       |894.59      |1441.42     |0.41     |FILM_TIE_IN   |MATURE         |
-|SKU-01943|MASS_B       |2026-07-04   |1      |885.0       |418.3       |674.0       |466.7    |FILM_TIE_IN   |MATURE         |
-|SKU-00639|ETAIL_C      |2026-07-04   |1      |858.0       |772.51      |1244.71     |85.49    |SOCIAL_TREND  |DECLINE        |
-|SKU-00362|MASS_A       |2026-07-04   |1      |856.0       |1660.28     |2675.16     |804.28   |SOCIAL_TREND  |MATURE         |
-|SKU-02150|MASS_B       |2026-07-04   |1      |761.0       |307.22      |495.01      |453.78   |FILM_TIE_IN   |DECLINE        |
-|SKU-02034|ETAIL_C      |2026-07-04   |1      |735.0       |446.03      |718.67      |288.97   |SOCIAL_TREND  |MATURE         |
+|SKU-01969|MASS_B       |2026-07-04   |1      |3208.0      |4786.02     |7687.33     |1578.02  |FILM_TIE_IN   |MATURE         |
+|SKU-02260|MASS_A       |2026-07-04   |1      |1370.0      |3331.75     |5351.48     |1961.75  |SOCIAL_TREND  |DECLINE        |
+|SKU-01062|MASS_B       |2026-07-04   |1      |1201.0      |882.82      |1417.99     |318.18   |FILM_TIE_IN   |MATURE         |
+|SKU-01324|MASS_A       |2026-07-04   |1      |1139.0      |464.05      |745.36      |674.95   |SOCIAL_TREND  |DECLINE        |
+|SKU-00931|MASS_A       |2026-07-04   |1      |1081.0      |526.31      |845.36      |554.69   |SOCIAL_TREND  |MATURE         |
+|SKU-00955|MASS_A       |2026-07-04   |1      |1021.0      |397.84      |639.02      |623.16   |SOCIAL_TREND  |DECLINE        |
+|SKU-01101|MASS_A       |2026-07-04   |1      |895.0       |459.95      |738.78      |435.05   |FILM_TIE_IN   |MATURE         |
+|SKU-01943|MASS_B       |2026-07-04   |1      |885.0       |326.82      |524.94      |558.18   |FILM_TIE_IN   |MATURE         |
+|SKU-00639|ETAIL_C      |2026-07-04   |1      |858.0       |849.43      |1364.36     |8.57     |SOCIAL_TREND  |DECLINE        |
+|SKU-00362|MASS_A       |2026-07-04   |1      |856.0       |1642.19     |2637.69     |786.19   |SOCIAL_TREND  |MATURE         |
+|SKU-02150|MASS_B       |2026-07-04   |1      |761.0       |325.3       |522.5       |435.7    |FILM_TIE_IN   |DECLINE        |
+|SKU-02034|ETAIL_C      |2026-07-04   |1      |735.0       |327.89      |526.66      |407.11   |SOCIAL_TREND  |MATURE         |
 +---------+-------------+-------------+-------+------------+------------+------------+---------+--------------+---------------+
 ```
 
@@ -1688,16 +1957,16 @@ _Output:_
 
 ```text
 wrote toy_demand_allocation.gold.fct_stockout_risk
-3,007 of 4,498 SKU x retailer series project a cover shortfall within 13 weeks (66.9%)
+3,016 of 4,498 SKU x retailer series project a cover shortfall within 13 weeks (67.1%)
 
 Tiered, which is what makes it a worklist rather than an alarm:
 +---------+------------+---------+---------+-------------+-------------------+------------+
 |risk_tier|combinations|min_weeks|max_weeks|units_at_risk|revenue_at_risk_usd|avg_severity|
 +---------+------------+---------+---------+-------------+-------------------+------------+
-|CRITICAL |445         |1        |2        |44652.0      |410474.0           |77.8        |
-|HIGH     |439         |3        |4        |19932.0      |165746.0           |69.0        |
-|MEDIUM   |1451        |5        |8        |53416.0      |505177.0           |60.6        |
-|LOW      |672         |9        |13       |11211.0      |102986.0           |43.2        |
+|CRITICAL |434         |1        |2        |54322.0      |509958.0           |77.2        |
+|HIGH     |440         |3        |4        |26038.0      |216010.0           |69.7        |
+|MEDIUM   |1479        |5        |8        |59659.0      |556576.0           |60.5        |
+|LOW      |663         |9        |13       |10233.0      |98848.0            |43.2        |
 +---------+------------+---------+---------+-------------+-------------------+------------+
 ```
 
@@ -1755,39 +2024,39 @@ top 15 by severity -- this is the head of the planner's Monday queue:
 +---------+-------------+--------------+--------------+---------------+---------+-----------------------+-----------------+-------------+-------------------+--------------+
 |sku_id   |retailer_code|brand         |license_family|lifecycle_stage|risk_tier|projected_stockout_week|weeks_to_stockout|units_at_risk|revenue_at_risk_usd|severity_score|
 +---------+-------------+--------------+--------------+---------------+---------+-----------------------+-----------------+-------------+-------------------+--------------+
-|SKU-01723|MASS_A       |Titan Squad   |SOCIAL_TREND  |MATURE         |CRITICAL |2026-10-03             |1                |2093.0       |24569.94           |99.55         |
-|SKU-00135|MASS_A       |Snugglewick   |FILM_TIE_IN   |LAUNCH         |CRITICAL |2026-10-03             |1                |1864.0       |12340.32           |99.5          |
-|SKU-01417|MASS_A       |Titan Squad   |SOCIAL_TREND  |MATURE         |CRITICAL |2026-10-03             |1                |994.0        |11167.65           |99.48         |
-|SKU-02079|MASS_A       |Snugglewick   |SOCIAL_TREND  |MATURE         |CRITICAL |2026-10-03             |1                |643.0        |8002.15            |99.35         |
-|SKU-01932|MASS_B       |Titan Squad   |FILM_TIE_IN   |LAUNCH         |CRITICAL |2026-10-03             |1                |690.0        |15584.08           |99.23         |
-|SKU-00920|MASS_A       |Snugglewick   |SOCIAL_TREND  |GROWTH         |CRITICAL |2026-10-03             |1                |1178.0       |6278.95            |99.22         |
-|SKU-01826|MASS_B       |Glowberry Pets|SOCIAL_TREND  |GROWTH         |CRITICAL |2026-10-03             |1                |1338.0       |9873.63            |99.12         |
-|SKU-02016|MASS_A       |Titan Squad   |SOCIAL_TREND  |LAUNCH         |CRITICAL |2026-10-03             |1                |256.0        |4762.71            |99.08         |
-|SKU-00457|MASS_B       |Snugglewick   |SOCIAL_TREND  |MATURE         |CRITICAL |2026-10-03             |1                |915.0        |7491.67            |99.02         |
-|SKU-02282|MASS_A       |Titan Squad   |SOCIAL_TREND  |MATURE         |CRITICAL |2026-10-03             |1                |455.0        |4549.71            |99.02         |
-|SKU-01674|MASS_A       |Titan Squad   |SOCIAL_TREND  |MATURE         |CRITICAL |2026-10-03             |1                |192.0        |4008.15            |98.95         |
-|SKU-00099|MASS_B       |Titan Squad   |FILM_TIE_IN   |LAUNCH         |CRITICAL |2026-10-03             |1                |430.0        |6306.63            |98.93         |
-|SKU-00862|MASS_B       |Titan Squad   |SOCIAL_TREND  |GROWTH         |CRITICAL |2026-10-03             |1                |531.0        |6218.83            |98.9          |
-|SKU-01815|ETAIL_C      |Titan Squad   |SOCIAL_TREND  |MATURE         |CRITICAL |2026-10-03             |1                |805.0        |10420.74           |98.85         |
-|SKU-00136|ETAIL_C      |Titan Squad   |SOCIAL_TREND  |GROWTH         |CRITICAL |2026-10-03             |1                |388.0        |8340.27            |98.78         |
+|SKU-01723|MASS_A       |Titan Squad   |SOCIAL_TREND  |MATURE         |CRITICAL |2026-10-03             |1                |3460.0       |40623.8            |99.53         |
+|SKU-00135|MASS_A       |Snugglewick   |FILM_TIE_IN   |LAUNCH         |CRITICAL |2026-10-03             |1                |1766.0       |11691.66           |99.45         |
+|SKU-02079|MASS_A       |Snugglewick   |SOCIAL_TREND  |MATURE         |CRITICAL |2026-10-03             |1                |706.0        |8782.16            |99.3          |
+|SKU-02016|MASS_A       |Titan Squad   |SOCIAL_TREND  |LAUNCH         |CRITICAL |2026-10-03             |1                |391.0        |7285.82            |99.19         |
+|SKU-01932|MASS_B       |Titan Squad   |FILM_TIE_IN   |LAUNCH         |CRITICAL |2026-10-03             |1                |910.0        |20556.67           |99.18         |
+|SKU-00920|MASS_A       |Snugglewick   |SOCIAL_TREND  |GROWTH         |CRITICAL |2026-10-03             |1                |1228.0       |6547.05            |99.15         |
+|SKU-01826|MASS_B       |Glowberry Pets|SOCIAL_TREND  |GROWTH         |CRITICAL |2026-10-03             |1                |1334.0       |9841.3             |99.08         |
+|SKU-02282|MASS_A       |Titan Squad   |SOCIAL_TREND  |MATURE         |CRITICAL |2026-10-03             |1                |535.0        |5347.92            |99.04         |
+|SKU-00136|MASS_B       |Titan Squad   |SOCIAL_TREND  |GROWTH         |CRITICAL |2026-10-03             |1                |364.0        |7811.84            |98.97         |
+|SKU-01815|ETAIL_C      |Titan Squad   |SOCIAL_TREND  |MATURE         |CRITICAL |2026-10-03             |1                |6736.0       |87236.9            |98.95         |
+|SKU-00099|MASS_B       |Titan Squad   |FILM_TIE_IN   |LAUNCH         |CRITICAL |2026-10-03             |1                |504.0        |7398.08            |98.92         |
+|SKU-01674|MASS_A       |Titan Squad   |SOCIAL_TREND  |MATURE         |CRITICAL |2026-10-03             |1                |218.0        |4540.32            |98.92         |
+|SKU-00457|MASS_B       |Snugglewick   |SOCIAL_TREND  |MATURE         |CRITICAL |2026-10-03             |1                |898.0        |7352.07            |98.9          |
+|SKU-02034|ETAIL_C      |Glowberry Pets|SOCIAL_TREND  |MATURE         |CRITICAL |2026-10-03             |1                |3789.0       |15763.45           |98.87         |
+|SKU-01020|MASS_A       |Titan Squad   |SOCIAL_TREND  |MATURE         |CRITICAL |2026-10-03             |1                |224.0        |4169.56            |98.85         |
 +---------+-------------+--------------+--------------+---------------+---------+-----------------------+-----------------+-------------+-------------------+--------------+
 
 risk concentration by licence family:
 +--------------+--------------------+---------------------+-------------+-------------------+
 |license_family|at_risk_combinations|avg_weeks_to_stockout|units_at_risk|revenue_at_risk_usd|
 +--------------+--------------------+---------------------+-------------+-------------------+
-|EVERGREEN     |1810                |7.0                  |50493.0      |467061.0           |
-|SOCIAL_TREND  |644                 |3.6                  |51984.0      |456476.0           |
-|FILM_TIE_IN   |553                 |6.2                  |26734.0      |260847.0           |
+|SOCIAL_TREND  |645                 |3.7                  |64521.0      |579004.0           |
+|EVERGREEN     |1807                |6.9                  |53609.0      |503546.0           |
+|FILM_TIE_IN   |564                 |6.3                  |32122.0      |298842.0           |
 +--------------+--------------------+---------------------+-------------+-------------------+
 
 by retailer:
 +-------------+---------------------+--------------------+-------------------+------------+
 |retailer_code|retailer_label       |at_risk_combinations|revenue_at_risk_usd|avg_severity|
 +-------------+---------------------+--------------------+-------------------+------------+
-|MASS_B       |Mass Retail Account B|989                 |404902.0           |60.7        |
-|ETAIL_C      |E-tail Account C     |1023                |404807.0           |60.2        |
-|MASS_A       |Mass Retail Account A|995                 |374675.0           |60.5        |
+|ETAIL_C      |E-tail Account C     |1024                |549020.0           |60.3        |
+|MASS_A       |Mass Retail Account A|997                 |429178.0           |60.7        |
+|MASS_B       |Mass Retail Account B|995                 |403194.0           |60.3        |
 +-------------+---------------------+--------------------+-------------------+------------+
 
 SKUs where two or more retailers compete for the same constrained pool
@@ -1795,16 +2064,16 @@ SKUs where two or more retailers compete for the same constrained pool
 +---------+--------------+--------------+-----------------+-----------------+----------------------+----------------------------+
 |sku_id   |brand         |license_family|retailers_at_risk|sku_on_hand_units|combined_units_at_risk|combined_revenue_at_risk_usd|
 +---------+--------------+--------------+-----------------+-----------------+----------------------+----------------------------+
-|SKU-00135|Snugglewick   |FILM_TIE_IN   |3                |32               |3266.0                |21625.0                     |
-|SKU-01932|Titan Squad   |FILM_TIE_IN   |2                |15               |763.0                 |17233.0                     |
-|SKU-00457|Snugglewick   |SOCIAL_TREND  |3                |1                |2087.0                |17089.0                     |
-|SKU-01096|Titan Squad   |FILM_TIE_IN   |2                |5685             |891.0                 |15179.0                     |
-|SKU-01417|Titan Squad   |SOCIAL_TREND  |3                |275              |1243.0                |13966.0                     |
-|SKU-02079|Snugglewick   |SOCIAL_TREND  |2                |0                |1014.0                |12619.0                     |
-|SKU-00136|Titan Squad   |SOCIAL_TREND  |2                |340              |562.0                 |12068.0                     |
-|SKU-00840|Titan Squad   |FILM_TIE_IN   |2                |4284             |529.0                 |11345.0                     |
-|SKU-00257|Titan Squad   |EVERGREEN     |2                |2725             |609.0                 |9736.0                      |
-|SKU-01426|Glowberry Pets|SOCIAL_TREND  |3                |8                |1048.0                |9480.0                      |
+|SKU-01632|Snugglewick   |FILM_TIE_IN   |2                |7934             |2980.0                |31087.0                     |
+|SKU-01932|Titan Squad   |FILM_TIE_IN   |2                |15               |982.0                 |22179.0                     |
+|SKU-00135|Snugglewick   |FILM_TIE_IN   |3                |32               |2951.0                |19535.0                     |
+|SKU-00136|Titan Squad   |SOCIAL_TREND  |2                |340              |774.0                 |16610.0                     |
+|SKU-00457|Snugglewick   |SOCIAL_TREND  |3                |1                |1954.0                |16002.0                     |
+|SKU-02079|Snugglewick   |SOCIAL_TREND  |2                |0                |1116.0                |13887.0                     |
+|SKU-02302|Titan Squad   |EVERGREEN     |2                |1706             |815.0                 |12724.0                     |
+|SKU-02104|Titan Squad   |EVERGREEN     |2                |2349             |989.0                 |12690.0                     |
+|SKU-01096|Titan Squad   |FILM_TIE_IN   |2                |5685             |630.0                 |10728.0                     |
+|SKU-01426|Glowberry Pets|SOCIAL_TREND  |3                |8                |1174.0                |10612.0                     |
 +---------+--------------+--------------+-----------------+-----------------+----------------------+----------------------------+
 ```
 
@@ -1819,10 +2088,10 @@ is the least interesting part, because most tools can fit seven models.
 What is different here is what surrounds the model:
 
 * **Governed features, not a CSV.** `ml.demand_features_weekly` is a Unity
-  Catalog table with a primary key, a timeseries column, comments and grants.
-  The training set was assembled through a `FeatureLookup`, so the
-  point-in-time join is declared once and reused at inference rather than
-  reimplemented in a scoring script.
+  Catalog table with a composite primary key, comments and grants. The
+  training set was assembled through a `FeatureLookup`, so the join is declared
+  once and `fe.score_batch` reuses it at inference from keys alone, rather than
+  reimplementing it in a scoring script.
 * **Lineage from landing file to prediction.** `_source_file` on the Bronze row
   survives into Gold; Gold feeds the feature table; the feature table feeds the
   model; the model writes `gold.fct_demand_forecast`. That chain is queryable
@@ -1830,8 +2099,9 @@ What is different here is what surrounds the model:
 * **Open format, no export step.** The model is MLflow-flavoured in UC with
   `@champion` / `@challenger` aliases. Promotion is an alias move, not a
   re-export and re-deploy, and nothing downstream references a version number.
-* **One platform for the next three stages.** The same registered model is
-  called by a serving endpoint, reasoned over by an agent, served to an app
+* **One platform for the next three stages.** The same fitted model, registered
+  as a feature-backed version for batch and a plain twin for the real-time
+  endpoint, is reasoned over by an agent, served to an app
   through Lakebase and queried in natural language through Genie — without
   leaving the governance boundary or handing a pickle to another system.
 * **The governance already applies to it.** The row filter and column mask from

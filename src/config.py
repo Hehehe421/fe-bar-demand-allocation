@@ -165,6 +165,12 @@ METRIC_VIEWS: Final[tuple[str, ...]] = (
 # --------------------------------------------------------------------------
 
 MODEL_NAME: Final[str] = fq("ml", "demand_forecaster")
+#: Plain-pyfunc twin of MODEL_NAME for the real-time endpoint. Same fitted
+#: estimators, no feature-store lineage: a model logged with fe.log_model makes
+#: Model Serving try to set up an online feature store, which this build
+#: deliberately does not have ("Online feature store setup failed").
+MODEL_NAME_RT: Final[str] = fq("ml", "demand_forecaster_rt")
+FORECASTER_ENDPOINT: Final[str] = "toy-demand-forecaster"
 MLFLOW_EXPERIMENT: Final[str] = "/Users/sixuan.he@databricks.com/toy_demand_allocation_forecast"
 FEATURE_TABLE: Final[str] = fq("ml", "demand_features_weekly")
 

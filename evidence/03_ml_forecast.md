@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Produced by | `notebooks/03_demand_forecast.ipynb` on cluster `1008-205814-qhbfm7tc` (DBR 16.4 LTS ML), then `tools/evidence_03_ml_forecast.py` reading MLflow and Unity Catalog back |
-| Generated at | 2026-10-09 20:35:06 UTC |
+| Generated at | 2026-10-15 18:43:59 UTC |
 | Workspace | `https://fevm-stable-classic-pqjg18.cloud.databricks.com` |
 | Profile | `vm-summer-classic` |
 | MLflow experiment | `/Users/sixuan.he@databricks.com/toy_demand_allocation_forecast` |
@@ -48,27 +48,35 @@ exact record of one execution rather than an accumulation across runs.
 
 | rank | algorithm | family | wape_pct | mape_nonzero_pct | bias_pct | rmse | pinball_p50 | pinball_p90 | p90_coverage_pct | train_seconds | run_id |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| 1 | lightgbm | gradient_boosting | 67.36 | 183.373 | 5.224 | 93.215 | 11.31 | 9.526 | 89.951 | 43.3 | b538cea89e7c4c768c28da6650d8ed72 |
-| 2 | xgboost | gradient_boosting | 72.883 | 206.873 | 11.159 | 98.517 | 12.237 | 9.809 | 89.245 | 75.7 | 8ac9704203a8443aa19df6a888dc88ed |
-| 3 | random_forest | sklearn_ensemble | 90.64 | 291.367 | 32.146 | 112.641 | 15.219 | 10.635 | 91.547 | 146.2 | 11b90f25c54543e8ac27ee22a6ca5e2a |
-| 4 | ridge_linear | linear | 91.665 | 406.062 | 31.89 | 96.371 | 15.391 | 18.144 | 85.317 | 12.9 | 1890c13e7293446f81dd140bfac90dfb |
-| 5 | sklearn_hist_gbm | sklearn_boosting | 92.993 | 259.888 | 26.633 | 270.228 | 15.614 | 11.324 | 90.762 | 26.1 | 2a5fc893c1334b06bce1352350d25e79 |
-| 6 | seasonal_naive | baseline | 95.342 | 269.2 | 20.241 | 119.124 | 16.008 | 16.477 | 89.629 | 0.6 | 558bf29ad98e44888a01fb1e152b9f9d |
-| 7 | trailing_mean_13 | statistical | 96.724 | 258.484 | 16.466 | 114.866 | 16.24 | 15.101 | 91.173 | 0.4 | 3d50b737a50a4ad28beb39006fed2a59 |
+| 1 | lightgbm | gradient_boosting | 67.419 | 176.793 | 4.007 | 102.629 | 11.32 | 9.613 | 89.837 | 51.9 | d76f7f2cf35549d59323e8d2b802741c |
+| 2 | xgboost | gradient_boosting | 72.386 | 194.987 | 9.401 | 98.937 | 12.154 | 9.916 | 88.917 | 80.5 | b6bc59817ee741efaded55c38df265bc |
+| 3 | ridge_linear | linear | 91.665 | 406.062 | 31.89 | 96.371 | 15.391 | 18.144 | 85.317 | 12.4 | ba4a53bf59294a9588e4c5858bd7670e |
+| 4 | random_forest | sklearn_ensemble | 93.282 | 320.046 | 34.981 | 113.766 | 15.662 | 10.744 | 91.608 | 143.6 | fe029c5e0b1f493e97fc88e3de3fbbe2 |
+| 5 | seasonal_naive | baseline | 95.342 | 269.2 | 20.241 | 119.124 | 16.008 | 16.477 | 89.629 | 0.7 | 8a6456aae5a3403e8ec369f2efb14bc2 |
+| 6 | trailing_mean_13 | statistical | 96.724 | 258.484 | 16.466 | 114.866 | 16.24 | 15.101 | 91.173 | 0.4 | 4cfade5323f64340968fc6575e997b9c |
+| 7 | sklearn_hist_gbm | sklearn_boosting | 138.684 | 301.994 | 71.503 | 306.437 | 23.285 | 14.158 | 90.689 | 26.4 | 9f3e32966e624416b837a73ef14073ab |
 
 **WAPE is the headline** because it is volume-weighted and therefore stable
 on intermittent series. The `mape_nonzero_pct` column shows why a per-row
-MAPE average is not usable here — 183% to 406% — since it is dominated by
+MAPE average is not usable here — 177% to 406% — since it is dominated by
 near-zero denominators on slow sellers. It is reported because buyers ask
 for it, and the gap between the two is itself the argument.
 
 Three findings worth stating:
 
-1. **Gradient boosting wins decisively** — 67.4% WAPE against a 95.3%
-   seasonal-naive baseline, a 28.0-point / 29.4% relative improvement.
-2. **Four of seven candidates barely beat or lose to the baseline.** Ridge,
-   RandomForest and sklearn's `HistGradientBoosting` all land in the 90s.
-   Not every family suits this problem and the leaderboard says so.
+1. **Gradient boosting wins decisively** — 67.4% WAPE (lightgbm) against a 95.3%
+   seasonal-naive baseline, a 27.9-point / 29.3% relative improvement.
+   Across three executions of this notebook the champion's WAPE was 67.36%,
+   67.56% and 67.42%: a ~0.2-point run-to-run spread from multi-threaded
+   LightGBM. The ranking at the top never changed; quote the headline as
+   'about 67.4%', not to two decimals.
+2. **4 candidates (`ridge_linear`, `random_forest`, `trailing_mean_13`, `sklearn_hist_gbm`) land within 10 points of the
+   baseline or worse.** Not every family suits this problem and the
+   leaderboard says so. `sklearn_hist_gbm` in particular is unstable under
+   Poisson loss: 138.7% on this run against 93.0% on the previous one,
+   with identical hyperparameters and the same hash-selected training rows;
+   the join feeding it was the only change. The cause was not isolated. It
+   is reported as measured, not tuned until it behaves.
 3. **The first version of this sweep was useless and the reason is
    instructive.** See §3.
 
@@ -121,23 +129,23 @@ GROUP BY ALL ORDER BY wape_pct
 ```text
 License Family  wape_pct  bias_pct  p90_coverage_pct  actual_units  forecast_rows
 --------------  --------  --------  ----------------  ------------  -------------
-EVERGREEN       20.54     1.19      92.04             547171.0      26742        
-FILM_TIE_IN     55.62     36.05     96.21             433632.0      14383        
-SOCIAL_TREND    110.16    -10.33    74.70             717500.0      9449         
+EVERGREEN       20.41     1.2       92.00             547171.0      26742        
+FILM_TIE_IN     56.41     34.64     96.18             433632.0      14383        
+SOCIAL_TREND    109.92    -12.37    74.13             717500.0      9449         
 (3 rows)
 ```
 
 This is the most useful table in the stage:
 
-* **`EVERGREEN` forecasts at 20.5% WAPE with +1.2% bias and 92.0% p90
+* **`EVERGREEN` forecasts at 20.4% WAPE with +1.2% bias and 92.0% p90
   coverage.** On predictable demand the model is genuinely good and the
   interval is calibrated.
-* **`SOCIAL_TREND` forecasts at 110.2% WAPE with 74.7% p90 coverage.** Viral
+* **`SOCIAL_TREND` forecasts at 109.9% WAPE with 74.1% p90 coverage.** Viral
   spikes are close to unforecastable from history, *and* the upper quantile
-  under-covers by 15 points precisely where cover matters most. Anyone
+  under-covers by 16 points precisely where cover matters most. Anyone
   claiming a single portfolio accuracy number for this business is hiding
   this row.
-* **`FILM_TIE_IN` sits between, over-forecasting by 36%** — release windows
+* **`FILM_TIE_IN` sits between, over-forecasting by 35%** — release windows
   are partly predictable, and the model errs long.
 
 The operational consequence is specific: the p90 drives `fct_stockout_risk`,
@@ -151,19 +159,19 @@ the quantile alone.
 ```text
 horizon  wape_pct  bias_pct  actual_units
 -------  --------  --------  ------------
-1        36.66     6.14      151551.0    
-2        44.53     1.5       152495.0    
-3        54.17     0.33      153318.0    
-4        63.12     -0.34     152787.0    
-5        70.32     -1.94     148362.0    
-6        76.19     -0.25     142875.0    
-7        76.05     1.36      130683.0    
-8        78.58     5.28      121495.0    
-9        79.28     9.27      113349.0    
-10       80.29     10.19     110499.0    
-11       80.65     15.52     105812.0    
-12       79.42     15.83     105150.0    
-13       77.82     15.79     109927.0    
+1        39.3      5.9       151551.0    
+2        46.55     2.14      152495.0    
+3        56.49     2.55      153318.0    
+4        63.79     0.1       152787.0    
+5        71.53     -0.27     148362.0    
+6        76.15     -0.88     142875.0    
+7        75.43     -0.1      130683.0    
+8        76.56     1.35      121495.0    
+9        78.1      5.64      113349.0    
+10       78.33     5.53      110499.0    
+11       78.7      11.06     105812.0    
+12       76.7      10.87     105150.0    
+13       77.18     14.84     109927.0    
 (13 rows)
 ```
 
@@ -195,17 +203,13 @@ caller to rebuild 35 columns correctly.
 ```text
  version  aliases                  status     source_run_id                     
 --------  ------------------------ ---------- ----------------------------------
-       1  -                        READY      0d1665e5a8ca439ab67909ef7502ac8f  
-       2  -                        READY      57bf4c0b28f44899b8f60be33fec83ae  
-       3  -                        READY      46107ae8b358424fa45dabd92a175708  
-       4  -                        READY      4a8938be1dae4154b98a4d82ff32d8b8  
-       5  -                        READY      cc7b432b28884cf8b49df1f168a00d0e  
-       6  -                        READY      c7d67e43228f4854a2f1193d7f0e8e8d  
-       7  -                        READY      157ee79fb58a44228a118a5e5a906f11  
-       8  -                        READY      a12abb0d2eb64303ae6cbad4f635bfba  
-       9  @champion                READY      71e170aa1ae7404189a3e31807b054e6  
-      10  @challenger              READY      1c248f98586e48e7abb63752e98b6fb7  
-(10 versions)
+       9  -                        READY      71e170aa1ae7404189a3e31807b054e6  
+      10  -                        READY      1c248f98586e48e7abb63752e98b6fb7  
+      11  -                        READY      d695f9a22f6142e29730115da80fa35d  
+      12  -                        READY      856d434cfd374f75a1e0305942840ed3  
+      13  @champion                READY      66faa49606d6458a92d9218ad6012337  
+      14  @challenger              READY      2849ddaafa20499bae664c9f44b4db42  
+(6 versions)
 ```
 
 Alias assignments — this is what every downstream consumer loads, so no
@@ -213,8 +217,8 @@ notebook, app or serving endpoint references a version number:
 
 | Alias | Version | Algorithm | Holdout WAPE % | Resolved reference |
 |---|---:|---|---:|---|
-| `@champion` | 9 | lightgbm | 67.36 | `models:/toy_demand_allocation.ml.demand_forecaster@champion` |
-| `@challenger` | 10 | xgboost | 72.883 | `models:/toy_demand_allocation.ml.demand_forecaster@challenger` |
+| `@champion` | 13 | lightgbm | 67.419 | `models:/toy_demand_allocation.ml.demand_forecaster@champion` |
+| `@challenger` | 14 | xgboost | 72.386 | `models:/toy_demand_allocation.ml.demand_forecaster@challenger` |
 
 Versions accumulate across notebook runs, which is the point of a registry:
 earlier versions stay auditable and the aliases always resolve to the
@@ -228,19 +232,19 @@ lands in the Q4 build, which is when a licensed-toy planner is most exposed.
 ```text
 week_end_date  horizon  series  total_p50  total_p90  model_alias  model_version
 -------------  -------  ------  ---------  ---------  -----------  -------------
-2026-10-03     1        4498    203574.0   328011.0   champion     9            
-2026-10-10     2        4498    228621.0   361667.0   champion     9            
-2026-10-17     3        4498    248159.0   378796.0   champion     9            
-2026-10-24     4        4498    275656.0   439380.0   champion     9            
-2026-10-31     5        4498    285384.0   461311.0   champion     9            
-2026-11-07     6        4498    298409.0   480052.0   champion     9            
-2026-11-14     7        4498    298833.0   498995.0   champion     9            
-2026-11-21     8        4498    291680.0   485198.0   champion     9            
-2026-11-28     9        4498    268334.0   426690.0   champion     9            
-2026-12-05     10       4498    243731.0   387938.0   champion     9            
-2026-12-12     11       4498    218756.0   353265.0   champion     9            
-2026-12-19     12       4498    193369.0   309146.0   champion     9            
-2026-12-26     13       4498    173006.0   263046.0   champion     9            
+2026-10-03     1        4498    214327.0   344252.0   champion     13           
+2026-10-10     2        4498    242887.0   384409.0   champion     13           
+2026-10-17     3        4498    260854.0   400022.0   champion     13           
+2026-10-24     4        4498    293837.0   471830.0   champion     13           
+2026-10-31     5        4498    308786.0   501658.0   champion     13           
+2026-11-07     6        4498    322579.0   524827.0   champion     13           
+2026-11-14     7        4498    323268.0   541872.0   champion     13           
+2026-11-21     8        4498    309294.0   512438.0   champion     13           
+2026-11-28     9        4498    284603.0   455326.0   champion     13           
+2026-12-05     10       4498    252889.0   403727.0   champion     13           
+2026-12-12     11       4498    224350.0   360904.0   champion     13           
+2026-12-19     12       4498    198911.0   318257.0   champion     13           
+2026-12-26     13       4498    173929.0   265616.0   champion     13           
 (13 rows)
 ```
 
@@ -249,18 +253,18 @@ week_end_date  horizon  series  total_p50  total_p90  model_alias  model_version
 ```text
 sku_id     retailer_code  week_end_date  horizon  actual_units  forecast_p50  forecast_p90  abs_error  license_family  lifecycle_stage
 ---------  -------------  -------------  -------  ------------  ------------  ------------  ---------  --------------  ---------------
-SKU-02034  ETAIL_C        2026-08-01     5        5057.0        332.05        536.74        4724.95    SOCIAL_TREND    MATURE         
-SKU-02034  ETAIL_C        2026-07-25     4        4328.0        382.74        610.07        3945.26    SOCIAL_TREND    MATURE         
-SKU-02034  ETAIL_C        2026-08-08     6        4132.0        356.88        574.12        3775.12    SOCIAL_TREND    MATURE         
-SKU-01969  MASS_B         2026-07-25     4        3972.0        3051.77       4864.34       920.23     FILM_TIE_IN     MATURE         
-SKU-01089  ETAIL_C        2026-08-29     9        3686.0        262.62        417.61        3423.38    SOCIAL_TREND    MATURE         
-SKU-01089  ETAIL_C        2026-08-15     7        3574.0        288.58        481.88        3285.42    SOCIAL_TREND    MATURE         
-SKU-01969  MASS_B         2026-07-04     1        3208.0        3453.69       5564.81       245.69     FILM_TIE_IN     MATURE         
-SKU-02034  ETAIL_C        2026-07-18     3        3177.0        388.89        593.61        2788.11    SOCIAL_TREND    MATURE         
-SKU-01969  MASS_B         2026-07-11     2        3161.0        3698.1        5850.22       537.1      FILM_TIE_IN     MATURE         
-SKU-01089  ETAIL_C        2026-08-22     8        2961.0        275.12        457.65        2685.88    SOCIAL_TREND    MATURE         
-SKU-01815  ETAIL_C        2026-09-12     11       2772.0        171.04        276.2         2600.96    SOCIAL_TREND    MATURE         
-SKU-02034  ETAIL_C        2026-08-15     7        2724.0        342.48        571.88        2381.52    SOCIAL_TREND    MATURE         
+SKU-02034  ETAIL_C        2026-08-01     5        5057.0        308.67        501.46        4748.33    SOCIAL_TREND    MATURE         
+SKU-02034  ETAIL_C        2026-07-25     4        4328.0        287.99        462.45        4040.01    SOCIAL_TREND    MATURE         
+SKU-02034  ETAIL_C        2026-08-08     6        4132.0        300.21        488.43        3831.79    SOCIAL_TREND    MATURE         
+SKU-01969  MASS_B         2026-07-25     4        3972.0        3627.67       5825.15       344.33     FILM_TIE_IN     MATURE         
+SKU-01089  ETAIL_C        2026-08-29     9        3686.0        230.52        368.81        3455.48    SOCIAL_TREND    MATURE         
+SKU-01089  ETAIL_C        2026-08-15     7        3574.0        273.29        458.09        3300.71    SOCIAL_TREND    MATURE         
+SKU-01969  MASS_B         2026-07-04     1        3208.0        4786.02       7687.33       1578.02    FILM_TIE_IN     MATURE         
+SKU-02034  ETAIL_C        2026-07-18     3        3177.0        319.69        490.25        2857.31    SOCIAL_TREND    MATURE         
+SKU-01969  MASS_B         2026-07-11     2        3161.0        4865.7        7700.77       1704.7     FILM_TIE_IN     MATURE         
+SKU-01089  ETAIL_C        2026-08-22     8        2961.0        241.68        400.41        2719.32    SOCIAL_TREND    MATURE         
+SKU-01815  ETAIL_C        2026-09-12     11       2772.0        160.68        258.48        2611.32    SOCIAL_TREND    MATURE         
+SKU-02034  ETAIL_C        2026-08-15     7        2724.0        280.87        470.81        2443.13    SOCIAL_TREND    MATURE         
 (12 rows)
 ```
 
@@ -276,10 +280,10 @@ forecast demand. That is what makes the allocation genuinely constrained.
 ```text
 risk_tier  combinations  min_weeks  max_weeks  units_at_risk  revenue_at_risk_usd  avg_severity
 ---------  ------------  ---------  ---------  -------------  -------------------  ------------
-CRITICAL   445           1          2          44652.0        410474.0             77.8        
-HIGH       439           3          4          19932.0        165746.0             69.0        
-MEDIUM     1451          5          8          53416.0        505177.0             60.6        
-LOW        672           9          13         11211.0        102986.0             43.2        
+CRITICAL   434           1          2          54322.0        509958.0             77.2        
+HIGH       440           3          4          26038.0        216010.0             69.7        
+MEDIUM     1479          5          8          59659.0        556576.0             60.5        
+LOW        663           9          13         10233.0        98848.0              43.2        
 (4 rows)
 ```
 
@@ -305,21 +309,21 @@ linearly.
 ```text
 sku_id     retailer_code  brand           license_family  lifecycle_stage  risk_tier  projected_stockout_week  weeks_to_stockout  units_at_risk  revenue_at_risk_usd  severity_score
 ---------  -------------  --------------  --------------  ---------------  ---------  -----------------------  -----------------  -------------  -------------------  --------------
-SKU-01723  MASS_A         Titan Squad     SOCIAL_TREND    MATURE           CRITICAL   2026-10-03               1                  2093.0         24569.94             99.55         
-SKU-00135  MASS_A         Snugglewick     FILM_TIE_IN     LAUNCH           CRITICAL   2026-10-03               1                  1864.0         12340.32             99.5          
-SKU-01417  MASS_A         Titan Squad     SOCIAL_TREND    MATURE           CRITICAL   2026-10-03               1                  994.0          11167.65             99.48         
-SKU-02079  MASS_A         Snugglewick     SOCIAL_TREND    MATURE           CRITICAL   2026-10-03               1                  643.0          8002.15              99.35         
-SKU-01932  MASS_B         Titan Squad     FILM_TIE_IN     LAUNCH           CRITICAL   2026-10-03               1                  690.0          15584.08             99.23         
-SKU-00920  MASS_A         Snugglewick     SOCIAL_TREND    GROWTH           CRITICAL   2026-10-03               1                  1178.0         6278.95              99.22         
-SKU-01826  MASS_B         Glowberry Pets  SOCIAL_TREND    GROWTH           CRITICAL   2026-10-03               1                  1338.0         9873.63              99.12         
-SKU-02016  MASS_A         Titan Squad     SOCIAL_TREND    LAUNCH           CRITICAL   2026-10-03               1                  256.0          4762.71              99.08         
-SKU-00457  MASS_B         Snugglewick     SOCIAL_TREND    MATURE           CRITICAL   2026-10-03               1                  915.0          7491.67              99.02         
-SKU-02282  MASS_A         Titan Squad     SOCIAL_TREND    MATURE           CRITICAL   2026-10-03               1                  455.0          4549.71              99.02         
-SKU-01674  MASS_A         Titan Squad     SOCIAL_TREND    MATURE           CRITICAL   2026-10-03               1                  192.0          4008.15              98.95         
-SKU-00099  MASS_B         Titan Squad     FILM_TIE_IN     LAUNCH           CRITICAL   2026-10-03               1                  430.0          6306.63              98.93         
-SKU-00862  MASS_B         Titan Squad     SOCIAL_TREND    GROWTH           CRITICAL   2026-10-03               1                  531.0          6218.83              98.9          
-SKU-01815  ETAIL_C        Titan Squad     SOCIAL_TREND    MATURE           CRITICAL   2026-10-03               1                  805.0          10420.74             98.85         
-SKU-00136  ETAIL_C        Titan Squad     SOCIAL_TREND    GROWTH           CRITICAL   2026-10-03               1                  388.0          8340.27              98.78         
+SKU-01723  MASS_A         Titan Squad     SOCIAL_TREND    MATURE           CRITICAL   2026-10-03               1                  3460.0         40623.8              99.53         
+SKU-00135  MASS_A         Snugglewick     FILM_TIE_IN     LAUNCH           CRITICAL   2026-10-03               1                  1766.0         11691.66             99.45         
+SKU-02079  MASS_A         Snugglewick     SOCIAL_TREND    MATURE           CRITICAL   2026-10-03               1                  706.0          8782.16              99.3          
+SKU-02016  MASS_A         Titan Squad     SOCIAL_TREND    LAUNCH           CRITICAL   2026-10-03               1                  391.0          7285.82              99.19         
+SKU-01932  MASS_B         Titan Squad     FILM_TIE_IN     LAUNCH           CRITICAL   2026-10-03               1                  910.0          20556.67             99.18         
+SKU-00920  MASS_A         Snugglewick     SOCIAL_TREND    GROWTH           CRITICAL   2026-10-03               1                  1228.0         6547.05              99.15         
+SKU-01826  MASS_B         Glowberry Pets  SOCIAL_TREND    GROWTH           CRITICAL   2026-10-03               1                  1334.0         9841.3               99.08         
+SKU-02282  MASS_A         Titan Squad     SOCIAL_TREND    MATURE           CRITICAL   2026-10-03               1                  535.0          5347.92              99.04         
+SKU-00136  MASS_B         Titan Squad     SOCIAL_TREND    GROWTH           CRITICAL   2026-10-03               1                  364.0          7811.84              98.97         
+SKU-01815  ETAIL_C        Titan Squad     SOCIAL_TREND    MATURE           CRITICAL   2026-10-03               1                  6736.0         87236.9              98.95         
+SKU-00099  MASS_B         Titan Squad     FILM_TIE_IN     LAUNCH           CRITICAL   2026-10-03               1                  504.0          7398.08              98.92         
+SKU-01674  MASS_A         Titan Squad     SOCIAL_TREND    MATURE           CRITICAL   2026-10-03               1                  218.0          4540.32              98.92         
+SKU-00457  MASS_B         Snugglewick     SOCIAL_TREND    MATURE           CRITICAL   2026-10-03               1                  898.0          7352.07              98.9          
+SKU-02034  ETAIL_C        Glowberry Pets  SOCIAL_TREND    MATURE           CRITICAL   2026-10-03               1                  3789.0         15763.45             98.87         
+SKU-01020  MASS_A         Titan Squad     SOCIAL_TREND    MATURE           CRITICAL   2026-10-03               1                  224.0          4169.56              98.85         
 (15 rows)
 ```
 
@@ -332,16 +336,16 @@ happens verbally in a Monday meeting with no system of record.
 ```text
 sku_id     brand           license_family  retailers_at_risk  sku_on_hand_units  sku_inbound_units  combined_units_at_risk  combined_revenue_at_risk_usd
 ---------  --------------  --------------  -----------------  -----------------  -----------------  ----------------------  ----------------------------
-SKU-00135  Snugglewick     FILM_TIE_IN     3                  32                 0                  3266.0                  21625.0                     
-SKU-01932  Titan Squad     FILM_TIE_IN     2                  15                 0                  763.0                   17233.0                     
-SKU-00457  Snugglewick     SOCIAL_TREND    3                  1                  5127               2087.0                  17089.0                     
-SKU-01096  Titan Squad     FILM_TIE_IN     2                  5685               32                 891.0                   15179.0                     
-SKU-01417  Titan Squad     SOCIAL_TREND    3                  275                3543               1243.0                  13966.0                     
-SKU-02079  Snugglewick     SOCIAL_TREND    2                  0                  1999               1014.0                  12619.0                     
-SKU-00136  Titan Squad     SOCIAL_TREND    2                  340                2534               562.0                   12068.0                     
-SKU-00840  Titan Squad     FILM_TIE_IN     2                  4284               141                529.0                   11345.0                     
-SKU-00257  Titan Squad     EVERGREEN       2                  2725               3111               609.0                   9736.0                      
-SKU-01426  Glowberry Pets  SOCIAL_TREND    3                  8                  936                1048.0                  9480.0                      
+SKU-01632  Snugglewick     FILM_TIE_IN     2                  7934               0                  2980.0                  31087.0                     
+SKU-01932  Titan Squad     FILM_TIE_IN     2                  15                 0                  982.0                   22179.0                     
+SKU-00135  Snugglewick     FILM_TIE_IN     3                  32                 0                  2951.0                  19535.0                     
+SKU-00136  Titan Squad     SOCIAL_TREND    2                  340                2534               774.0                   16610.0                     
+SKU-00457  Snugglewick     SOCIAL_TREND    3                  1                  5127               1954.0                  16002.0                     
+SKU-02079  Snugglewick     SOCIAL_TREND    2                  0                  1999               1116.0                  13887.0                     
+SKU-02302  Titan Squad     EVERGREEN       2                  1706               3360               815.0                   12724.0                     
+SKU-02104  Titan Squad     EVERGREEN       2                  2349               2124               989.0                   12690.0                     
+SKU-01096  Titan Squad     FILM_TIE_IN     2                  5685               32                 630.0                   10728.0                     
+SKU-01426  Glowberry Pets  SOCIAL_TREND    3                  8                  936                1174.0                  10612.0                     
 (10 rows)
 ```
 
@@ -350,30 +354,38 @@ SKU-01426  Glowberry Pets  SOCIAL_TREND    3                  8                 
 ```text
 license_family  at_risk_combinations  avg_weeks_to_stockout  units_at_risk  revenue_at_risk_usd
 --------------  --------------------  ---------------------  -------------  -------------------
-EVERGREEN       1810                  7.0                    50493.0        467061.0           
-SOCIAL_TREND    644                   3.6                    51984.0        456476.0           
-FILM_TIE_IN     553                   6.2                    26734.0        260847.0           
+SOCIAL_TREND    645                   3.7                    64521.0        579004.0           
+EVERGREEN       1807                  6.9                    53609.0        503546.0           
+FILM_TIE_IN     564                   6.3                    32122.0        298842.0           
 (3 rows)
 ```
 
 ```text
 retailer_code  retailer_label         at_risk_combinations  revenue_at_risk_usd  avg_severity
 -------------  ---------------------  --------------------  -------------------  ------------
-MASS_B         Mass Retail Account B  989                   404902.0             60.7        
-ETAIL_C        E-tail Account C       1023                  404807.0             60.2        
-MASS_A         Mass Retail Account A  995                   374675.0             60.5        
+ETAIL_C        E-tail Account C       1024                  549020.0             60.3        
+MASS_A         Mass Retail Account A  997                   429178.0             60.7        
+MASS_B         Mass Retail Account B  995                   403194.0             60.3        
 (3 rows)
 ```
 
 ## 9. Lineage: Gold fact to feature table to model to forecast
 
 ```text
-source                                           target                                         
------------------------------------------------  -----------------------------------------------
-toy_demand_allocation.ml.demand_features_weekly  NULL                                           
-NULL                                             toy_demand_allocation.ml.demand_features_weekly
-toy_demand_allocation.gold.dim_retailer_dc       toy_demand_allocation.ml.demand_features_weekly
-toy_demand_allocation.gold.fct_demand_weekly     toy_demand_allocation.ml.demand_features_weekly
-toy_demand_allocation.silver.product_master      toy_demand_allocation.ml.demand_features_weekly
-(5 rows)
+source                                             target                                             
+-------------------------------------------------  ---------------------------------------------------
+toy_demand_allocation.gold.fct_demand_forecast     NULL                                               
+toy_demand_allocation.ml.demand_features_weekly    NULL                                               
+NULL                                               toy_demand_allocation.gold.fct_demand_forecast     
+NULL                                               toy_demand_allocation.gold.fct_demand_forecast_eval
+toy_demand_allocation.gold.dim_retailer_dc         toy_demand_allocation.gold.fct_stockout_risk       
+toy_demand_allocation.gold.fct_demand_forecast     toy_demand_allocation.gold.fct_stockout_risk       
+toy_demand_allocation.gold.fct_inbound_eta         toy_demand_allocation.gold.fct_stockout_risk       
+toy_demand_allocation.gold.fct_inventory_position  toy_demand_allocation.gold.fct_stockout_risk       
+toy_demand_allocation.silver.product_master        toy_demand_allocation.gold.fct_stockout_risk       
+NULL                                               toy_demand_allocation.ml.demand_features_weekly    
+toy_demand_allocation.gold.dim_retailer_dc         toy_demand_allocation.ml.demand_features_weekly    
+toy_demand_allocation.gold.fct_demand_weekly       toy_demand_allocation.ml.demand_features_weekly    
+toy_demand_allocation.silver.product_master        toy_demand_allocation.ml.demand_features_weekly    
+(13 rows)
 ```

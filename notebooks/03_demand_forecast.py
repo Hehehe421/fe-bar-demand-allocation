@@ -6,8 +6,8 @@
 #
 # * `ml.demand_features_weekly` — a Feature Engineering table, keyed on
 #   (`sku_id`, `retailer_code`, `week_end_date`), joined into the training set
-#   through a `FeatureLookup` so point-in-time correctness and feature lineage are
-#   demonstrable rather than asserted.
+#   through a `FeatureLookup` so feature lineage is demonstrable rather than
+#   asserted.
 # * `ml.demand_forecaster` — the winning model registered in Unity Catalog, with
 #   `@champion` on the winner and `@challenger` on the runner-up.
 # * `gold.fct_demand_forecast` — 13 weeks forward, p50 and p90.
@@ -224,10 +224,15 @@ print(f"feature columns: {len(FEATURE_COLS)} ({len(CATEGORICAL)} categorical)")
 # %% [markdown]
 # ## 3. Register the feature table in Feature Engineering
 #
-# Written as a real Feature Engineering table with a primary key and a timeseries
-# column, so the `FeatureLookup` below is a genuine point-in-time join and the
+# Written as a real Feature Engineering table with a composite primary key, so the
 # lineage from `gold.fct_demand_weekly` through this table into the model is
 # visible in Unity Catalog.
+#
+# There is deliberately **no timeseries column**. The leakage guard in this build
+# is the frame, not the feature layer: features are computed at the origin week and
+# the label is taken from origin + h (section 4), with a single-origin holdout. The
+# lookup therefore joins on the origin week exactly; an as-of join would add
+# nothing and would put the timestamp semantics in a place a reviewer cannot see.
 
 # %%
 from databricks.feature_engineering import FeatureEngineeringClient, FeatureLookup  # noqa: E402
@@ -240,7 +245,6 @@ spark.sql(f"DROP TABLE IF EXISTS {config.FEATURE_TABLE}")
 fe.create_table(
     name=config.FEATURE_TABLE,
     primary_keys=["sku_id", "retailer_code", "week_end_date"],
-    timeseries_columns="week_end_date",
     df=feature_df,
     description=(
         "Weekly demand features at SKU x retailer x forecast-origin week. Lags, "
@@ -336,16 +340,16 @@ print(f"train subsample fraction {frac:.3f} (hash cutoff {cutoff}/{BUCKETS}) "
 # %% [markdown]
 # ## 5. Build the training set through a FeatureLookup
 #
-# This is the point-in-time join: the label frame carries only keys, the horizon
-# and the target, and every feature is resolved from the Feature Engineering table
-# at the **origin** week.
+# The label frame carries only keys, the origin week, the horizon and the target,
+# and every feature is resolved from the Feature Engineering table at the
+# **origin** week. `lookup_key` is positional against the table's primary key, so
+# `origin_week` is matched to `week_end_date`.
 
 # %%
 lookups = [
     FeatureLookup(
         table_name=config.FEATURE_TABLE,
-        lookup_key=["sku_id", "retailer_code"],
-        timestamp_lookup_key="origin_week",
+        lookup_key=["sku_id", "retailer_code", "origin_week"],
     )
 ]
 
@@ -381,19 +385,18 @@ print(pdf_train.head(3).to_string())
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
-# Calendar features for the week being PREDICTED, derived from the origin week
-# plus the horizon.
+# Calendar features for the week being PREDICTED are derived from the origin week
+# plus the horizon. They are not optional: the holdout stands at a single forecast
+# origin, so every origin-based calendar feature is *constant* across all 50,574
+# test rows, and without target-week features the model cannot tell a July target
+# from a late-September one except through `horizon`. The forward calendar is known
+# at forecast time, so using it is not leakage.
 #
-# These are not optional, and leaving them out is what made the first run of this
-# sweep useless. The holdout stands at a single forecast origin, so every
-# origin-based calendar feature is *constant* across all 50,574 test rows; the
-# model then has no way to distinguish a July target week from a late-September
-# one except through `horizon`. The boosting models duly over-predicted the whole
-# holdout by 62-106% and finished below a 13-week trailing mean.
-#
-# The forward calendar is known at forecast time -- you always know what week you
-# are forecasting into -- so using it is not leakage.
-TARGET_CAL = ["tgt_week_of_year", "tgt_sin_woy", "tgt_cos_woy", "tgt_weeks_to_q4_peak"]
+# The matrix construction lives in `forecasting.pyfunc_model.build_matrix` and is
+# the SAME function the registered model runs at inference. That is what makes
+# `fe.score_batch` and the serving endpoint safe: there is one implementation, so
+# training and serving cannot drift.
+from forecasting.pyfunc_model import TARGET_CAL, build_matrix  # noqa: E402
 
 # `retailer_code` is supplied by the label frame rather than the feature table
 MODEL_FEATURES = ["horizon", "retailer_code", *FEATURE_COLS, *TARGET_CAL]
@@ -402,22 +405,8 @@ ORIGIN_COL = "origin_week"
 
 
 def prep(df: pd.DataFrame) -> tuple[pd.DataFrame, np.ndarray]:
-    d = df.copy()
-    origin = pd.to_datetime(d[ORIGIN_COL])
-    target_week = origin + pd.to_timedelta(d["horizon"].astype(int) * 7, unit="D")
-    woy = target_week.dt.isocalendar().week.astype("float32").to_numpy()
-    d["tgt_week_of_year"] = woy
-    d["tgt_sin_woy"] = np.sin(2 * np.pi * woy / 52.0)
-    d["tgt_cos_woy"] = np.cos(2 * np.pi * woy / 52.0)
-    d["tgt_weeks_to_q4_peak"] = np.minimum(np.abs(woy - 47.0), 52.0 - np.abs(woy - 47.0))
-
-    X = d[MODEL_FEATURES].copy()
-    for c in CATEGORICAL:
-        X[c] = X[c].astype("category")
-    for c in X.columns:
-        if c not in CATEGORICAL:
-            X[c] = pd.to_numeric(X[c], errors="coerce").astype("float32")
-    y = d["target_units"].astype("float64").to_numpy()
+    X = build_matrix(df, MODEL_FEATURES, CATEGORICAL)
+    y = df["target_units"].astype("float64").to_numpy()
     return X, y
 
 
@@ -855,53 +844,149 @@ print(lift.to_string(index=False))
 # %% [markdown]
 # ## 12. Register champion and challenger in Unity Catalog
 #
-# Both the winner and the runner-up are logged through
-# `FeatureEngineeringClient.log_model`, so the model carries its `FeatureLookup`
-# spec with it. That matters for two reasons: the lineage from
-# `gold.fct_demand_weekly` through `ml.demand_features_weekly` into the model is
-# visible in Unity Catalog, and inference can resolve features by key instead of
-# requiring the caller to rebuild 35 columns correctly.
+# **What gets registered is not the bare estimator.** The estimators were trained on
+# a matrix built by `build_matrix` (target-week calendar columns, pinned category
+# levels), and p90 comes from a second model or a residual table. Logged bare, the
+# registered model could neither be batch-scored from keys nor served: it needed the
+# caller to rebuild that matrix, and it could only ever return p50. So each version
+# is a `DemandForecaster` pyfunc that carries `build_matrix`, the p50 estimator and
+# the p90 method inside it: **keys + features in, `forecast_p50` and `forecast_p90`
+# out.**
 #
-# They become two **versions of one registered model**, distinguished by alias.
-# `@champion` is what the app and the agent read; `@challenger` is what the next
+# That wrapper is registered twice, from the same fitted objects:
+#
+# * `ml.demand_forecaster` goes through `FeatureEngineeringClient.log_model`, so it
+#   carries its `FeatureLookup` spec. Lineage from `gold.fct_demand_weekly` through
+#   `ml.demand_features_weekly` into the model is visible in Unity Catalog, and
+#   `fe.score_batch` joins features by key (section 13) rather than rebuilding 35
+#   columns by hand.
+# * `ml.demand_forecaster_rt` is the identical model logged as a plain pyfunc with a
+#   signature. A feature-store-backed model cannot be deployed to Model Serving here:
+#   the endpoint tries to set up an online feature store and fails with "Online
+#   feature store setup failed", and this build deliberately has no online store.
+#   The real-time caller supplies the feature row itself (the app reads it from
+#   Lakebase), so no serving-time lookup is needed.
+#
+# In both, `@champion` is what consumers read and `@challenger` is what the next
 # evaluation promotes or discards. No consumer hardcodes a version number.
 
 # %%
+import cloudpickle  # noqa: E402
+import sklearn  # noqa: E402
+from mlflow.models import infer_signature  # noqa: E402
+
+from forecasting.pyfunc_model import DemandForecaster  # noqa: E402
+
 champ_name = CHAMPION
 chal_name = CHALLENGER
 champ_obj, champ_q90_tbl = fitted[champ_name]
 chal_obj, chal_q90_tbl = fitted[chal_name]
 
-registered: dict[str, int] = {}
+# Category levels exactly as the estimators saw them (aligned across splits in
+# section 6). Pinning them is what stops LightGBM mis-splitting on a request that
+# happens to contain only some of the levels.
+LEVELS = {c: [str(v) for v in X_train[c].cat.categories] for c in CATEGORICAL}
 
-for role, algo, model_obj in (
-    ("champion", champ_name, champ_obj),
-    ("challenger", chal_name, chal_obj),
-):
-    with mlflow.start_run(run_name=f"register_{role}_{algo}") as rr:
-        mlflow.set_tags({
-            "sweep_id": SWEEP_ID, "stage": "C1_register", "role": role,
-            "algorithm": algo, "data": "synthetic",
-        })
-        fe.log_model(
-            model=model_obj,
-            artifact_path="model",
-            flavor=mlflow.sklearn,
-            training_set=ts_train,
-            registered_model_name=config.MODEL_NAME,
-        )
-    client = mlflow.MlflowClient()
-    versions = client.search_model_versions(f"name='{config.MODEL_NAME}'")
-    newest = max(int(v.version) for v in versions)
-    registered[role] = newest
-    client.set_registered_model_alias(config.MODEL_NAME, role, newest)
-    client.set_model_version_tag(config.MODEL_NAME, str(newest), "algorithm", algo)
-    client.set_model_version_tag(config.MODEL_NAME, str(newest), "sweep_id", SWEEP_ID)
+REQUIREMENTS = [
+    f"mlflow=={mlflow.__version__}",
+    f"lightgbm=={lgb.__version__}",
+    f"xgboost=={xgb.__version__}",
+    f"scikit-learn=={sklearn.__version__}",
+    # NOT `pd.__version__`. This training runtime ships pandas 1.5.3, which has no
+    # Python 3.12 wheel, so the serving image tried to compile it from source and
+    # the container build failed (`No module named 'pkg_resources'`). The first
+    # real-time deploy died on exactly this. 2.2.3 has a wheel, and the wrapper
+    # uses only basic DataFrame operations that behave identically across 1.5/2.x;
+    # the validation cell below proves it rather than assuming it.
+    "pandas==2.2.3",
+    f"numpy=={np.__version__}",
+    f"cloudpickle=={cloudpickle.__version__}",
+]
+CODE_PATHS = [WS + "/src/forecasting"]
+
+# one realistic request row, for the signature and for pre-deploy validation
+example_in = pdf_test.drop(columns=["target_units"]).head(5).copy()
+example_in["origin_week"] = pd.to_datetime(example_in["origin_week"]).dt.strftime("%Y-%m-%d")
+example_in["horizon"] = example_in["horizon"].astype("int64")
+for c in example_in.columns:
+    if c not in CATEGORICAL and c not in ("sku_id", "origin_week", "horizon"):
+        example_in[c] = pd.to_numeric(example_in[c], errors="coerce").astype("float64")
+
+registered: dict[str, int] = {}
+registered_rt: dict[str, int] = {}
+client = mlflow.MlflowClient()
+
+
+def newest_version(name: str) -> int:
+    return max(int(v.version) for v in client.search_model_versions(f"name='{name}'"))
+
+
+def tag_version(name: str, ver: int, algo: str) -> None:
+    client.set_model_version_tag(name, str(ver), "algorithm", algo)
+    client.set_model_version_tag(name, str(ver), "sweep_id", SWEEP_ID)
     client.set_model_version_tag(
-        config.MODEL_NAME, str(newest), "holdout_wape_pct",
+        name, str(ver), "holdout_wape_pct",
         str(round(float(lb[lb.algorithm == algo].wape_pct.iloc[0]), 3)),
     )
-    print(f"{role:11} -> {config.MODEL_NAME} v{newest}  ({algo})")
+
+
+for role, algo, model_obj, q90_tbl in (
+    ("champion", champ_name, champ_obj, champ_q90_tbl),
+    ("challenger", chal_name, chal_obj, chal_q90_tbl),
+):
+    # The native quantile model exists for the champion only (section 10), and is
+    # used only if it won the calibration comparison. Every other version applies
+    # its own per-horizon residual-ratio table.
+    native = q_model if (role == "champion" and algo == CHAMPION and USE_NATIVE_P90) else None
+    wrapper = DemandForecaster(
+        p50_model=model_obj,
+        model_features=MODEL_FEATURES,
+        categorical=CATEGORICAL,
+        levels=LEVELS,
+        p90_model=native,
+        q90_table=q90_tbl,
+    )
+    example_out = wrapper.predict(None, example_in)
+    sig = infer_signature(example_in, example_out)
+
+    tags = {
+        "sweep_id": SWEEP_ID, "stage": "C1_register", "role": role,
+        "algorithm": algo, "p90_method": wrapper.p90_method, "data": "synthetic",
+    }
+    # feature-store-backed version, for fe.score_batch
+    with mlflow.start_run(run_name=f"register_{role}_{algo}"):
+        mlflow.set_tags(tags)
+        fe.log_model(
+            model=wrapper,
+            artifact_path="model",
+            flavor=mlflow.pyfunc,
+            training_set=ts_train,
+            registered_model_name=config.MODEL_NAME,
+            pip_requirements=REQUIREMENTS,
+            code_paths=CODE_PATHS,
+        )
+    registered[role] = newest_version(config.MODEL_NAME)
+    client.set_registered_model_alias(config.MODEL_NAME, role, registered[role])
+    tag_version(config.MODEL_NAME, registered[role], algo)
+
+    # plain-pyfunc twin, for the real-time endpoint
+    with mlflow.start_run(run_name=f"register_{role}_{algo}_rt"):
+        mlflow.set_tags({**tags, "variant": "realtime"})
+        mlflow.pyfunc.log_model(
+            artifact_path="model",
+            python_model=wrapper,
+            signature=sig,
+            input_example=example_in,
+            pip_requirements=REQUIREMENTS,
+            code_paths=CODE_PATHS,
+            registered_model_name=config.MODEL_NAME_RT,
+        )
+    registered_rt[role] = newest_version(config.MODEL_NAME_RT)
+    client.set_registered_model_alias(config.MODEL_NAME_RT, role, registered_rt[role])
+    tag_version(config.MODEL_NAME_RT, registered_rt[role], algo)
+    print(f"{role:11} -> {config.MODEL_NAME} v{registered[role]} (feature-backed)  |  "
+          f"{config.MODEL_NAME_RT} v{registered_rt[role]} (real-time)  "
+          f"[{algo}, p90={wrapper.p90_method}]")
 
 # %%
 client = mlflow.MlflowClient()
@@ -967,73 +1052,177 @@ for alias in (config.CHAMPION_ALIAS, config.CHALLENGER_ALIAS):
           f"holdout WAPE {t.get('holdout_wape_pct')}%")
 
 # %% [markdown]
-# ## 13. Score 13 weeks forward
+# ### Pre-deploy validation: does the real-time model work in the serving image's environment?
+#
+# A model that registers cleanly can still fail to deploy, and a failed container
+# build costs a long queue wait to discover. So before any endpoint is touched,
+# rebuild the environment the serving image will build, from the model's own
+# `requirements.txt`, in a fresh Python 3.12 virtualenv, and compare its predictions
+# with this notebook's. Same dependencies, none of the training runtime's packages,
+# binary wheels only (so an unbuildable pin fails here, as it would in the image).
+
+# %%
+import json  # noqa: E402
+import pathlib  # noqa: E402
+import shutil  # noqa: E402
+import subprocess  # noqa: E402
+
+
+def _sh(cmd: str) -> subprocess.CompletedProcess:
+    return subprocess.run(cmd, shell=True, capture_output=True, text=True)
+
+
+work = pathlib.Path("/local_disk0/tmp/rt_validation")
+shutil.rmtree(work, ignore_errors=True)
+work.mkdir(parents=True)
+
+rt_uri = f"models:/{config.MODEL_NAME_RT}@{config.CHAMPION_ALIAS}"
+art = pathlib.Path(mlflow.artifacts.download_artifacts(rt_uri, dst_path=str(work / "model")))
+print("model artifact :", rt_uri)
+print("requirements   :\n  " + "\n  ".join((art / "requirements.txt").read_text().split()))
+
+venv = work / "venv"
+r = _sh(f"python -m pip install -q uv && python -m uv venv {venv} --python /usr/bin/python3.12")
+assert r.returncode == 0, r.stderr[-800:]
+r = _sh(
+    f"python -m uv pip install --python {venv}/bin/python --only-binary :all: "
+    f"-r {art / 'requirements.txt'}"
+)
+assert r.returncode == 0, "requirements do not install on Python 3.12:\n" + r.stderr[-1500:]
+
+(work / "predict.py").write_text(f"""
+import json, pandas as pd, mlflow.pyfunc
+m = mlflow.pyfunc.load_model('{art}')
+ex = json.load(open('{art}/input_example.json'))
+out = m.predict(pd.DataFrame(data=ex['data'], columns=ex['columns']))
+print('RESULT' + json.dumps(out.to_dict(orient='list')))
+""")
+r = _sh(f"cd {work} && {venv}/bin/python predict.py")
+assert r.returncode == 0, r.stderr[-1500:]
+fresh = pd.DataFrame(json.loads(next(
+    ln for ln in r.stdout.splitlines() if ln.startswith("RESULT"))[len("RESULT"):]))
+probe = _sh(
+    f"{venv}/bin/python -c 'import pandas,sys;print(pandas.__version__, sys.version.split()[0])'"
+)
+print(f"\nfresh venv     : pandas / python = {probe.stdout.strip()}")
+print(f"this notebook  : pandas {pd.__version__}")
+mv_rt = client.get_model_version_by_alias(config.MODEL_NAME_RT, config.CHAMPION_ALIAS)
+print(f"rt champion    : {config.MODEL_NAME_RT} v{mv_rt.version}\n")
+
+ex_json = json.loads((art / "input_example.json").read_text())
+expected = mlflow.pyfunc.load_model(rt_uri).predict(
+    pd.DataFrame(ex_json["data"], columns=ex_json["columns"])
+)
+cmp_rt = pd.concat({"serving env": fresh, "this notebook": expected}, axis=1)
+print(cmp_rt.to_string())
+delta = float((fresh.to_numpy() - expected.to_numpy()).__abs__().max())
+print(f"\nmax |difference| = {delta:.6f}")
+assert delta < 0.02, "serving environment disagrees with the training environment"
+print("The serving environment reproduces the training environment's forecasts.")
+
+# %% [markdown]
+# ## 13. Score 13 weeks forward with `fe.score_batch`
 #
 # Stand at the last actual week and forecast the next 13 at horizons 1-13 in a
 # single pass — no recursion, so no error compounding. The window lands squarely
 # in the Q4 build, which is exactly when a licensed-toy planner is most exposed.
 #
-# p90 uses whichever method won the calibration comparison in §10.
+# **Scoring takes keys only.** The input frame is `sku_id`, `retailer_code`,
+# `origin_week` and `horizon`; `fe.score_batch` resolves all 33 feature columns from
+# the model's own registered `FeatureLookup`, and the model itself builds the
+# target-week calendar and applies p50 and p90. Nothing about the feature matrix is
+# rebuilt by hand here, which is the training/serving skew the feature layer exists
+# to prevent. A parity check at the end proves the keys-only path reproduces the
+# estimators' own output exactly.
 
 # %%
-origin_feats = (
+origin_keys = (
     spark.table(config.FEATURE_TABLE)
     .filter(F.col("week_end_date") == F.lit(W_LAST))
-    .toPandas()
+    .select("sku_id", "retailer_code", F.col("week_end_date").alias("origin_week"))
 )
-print(f"series with features at origin {W_LAST}: {len(origin_feats):,}")
+score_keys = origin_keys.crossJoin(
+    spark.range(1, H + 1).select(F.col("id").cast("int").alias("horizon"))
+)
+print(f"series with features at origin {W_LAST}: {origin_keys.count():,}")
+print(f"keys to score: {score_keys.count():,}  (columns: {score_keys.columns})")
 
-fwd = origin_feats.loc[origin_feats.index.repeat(H)].copy()
-fwd["horizon"] = np.tile(np.arange(1, H + 1), len(origin_feats))
-fwd["origin_week"] = pd.to_datetime(fwd["week_end_date"])
-fwd["target_units"] = 0.0  # placeholder; prep() needs the column, value unused
-
-X_fwd, _ = prep(fwd)
-p50_fwd = np.clip(champ_obj.predict(X_fwd), 0, None)
-if USE_NATIVE_P90:
-    p90_fwd = np.clip(q_model.predict(X_fwd), 0, None)
-    p90_fwd = np.maximum(p90_fwd, p50_fwd)
-else:
-    p90_fwd = apply_q90(p50_fwd, fwd["horizon"].to_numpy(), champ_q90_tbl)
-
-forecast = pd.DataFrame({
-    "sku_id": fwd["sku_id"].to_numpy(),
-    "retailer_code": fwd["retailer_code"].to_numpy(),
-    "origin_week": fwd["origin_week"].dt.date.to_numpy(),
-    "horizon": fwd["horizon"].to_numpy().astype(int),
-    "forecast_p50": np.round(p50_fwd, 2),
-    "forecast_p90": np.round(p90_fwd, 2),
+champion_uri = f"models:/{config.MODEL_NAME}@{config.CHAMPION_ALIAS}"
+scored = fe.score_batch(
+    model_uri=champion_uri,
+    df=score_keys,
+    result_type="struct<forecast_p50:double,forecast_p90:double>",
+)
+forecast_sdf = scored.select(
+    "sku_id", "retailer_code", "origin_week", "horizon",
+    F.round(F.col("prediction.forecast_p50"), 2).alias("forecast_p50"),
+    F.round(F.col("prediction.forecast_p90"), 2).alias("forecast_p90"),
+).withColumn("week_end_date", F.expr("date_add(origin_week, horizon * 7)")).withColumns({
+    "model_name": F.lit(config.MODEL_NAME),
+    "model_version": F.lit(registered["champion"]),
+    "model_alias": F.lit(config.CHAMPION_ALIAS),
+    "algorithm": F.lit(champ_name),
+    "p90_method": F.lit("native_quantile" if USE_NATIVE_P90 else "derived_residual_ratio"),
 })
-forecast["week_end_date"] = pd.to_datetime(forecast["origin_week"]) + pd.to_timedelta(
-    forecast["horizon"] * 7, unit="D"
-)
-forecast["week_end_date"] = forecast["week_end_date"].dt.date
-forecast["model_name"] = config.MODEL_NAME
-forecast["model_version"] = registered["champion"]
-forecast["model_alias"] = config.CHAMPION_ALIAS
-forecast["algorithm"] = champ_name
-forecast["p90_method"] = "native_quantile" if USE_NATIVE_P90 else "derived_residual_ratio"
-
-print(f"forecast rows: {len(forecast):,}  weeks "
-      f"{forecast.week_end_date.min()} .. {forecast.week_end_date.max()}")
-print(forecast.head(6).to_string(index=False))
-
-sdf = spark.createDataFrame(forecast)
-sdf.write.mode("overwrite").option("overwriteSchema", "true").saveAsTable(
+forecast_sdf.write.mode("overwrite").option("overwriteSchema", "true").saveAsTable(
     config.FCT_DEMAND_FORECAST
 )
 spark.sql(f"""
 COMMENT ON TABLE {config.FCT_DEMAND_FORECAST} IS
 '13-week forward demand forecast at SKU x retailer x week, p50 and p90, produced
-by the @champion version of ml.demand_forecaster from a single forecast origin.
-Consumed by gold.fct_stockout_risk, the allocation agent and the app. SYNTHETIC DATA.'
+by the @champion version of ml.demand_forecaster via fe.score_batch from a single
+forecast origin. Consumed by gold.fct_stockout_risk, the allocation agent and the
+app. SYNTHETIC DATA.'
 """)
-print(f"\nwrote {config.FCT_DEMAND_FORECAST}")
+print(f"\nwrote {config.FCT_DEMAND_FORECAST}  via {champion_uri} (v{registered['champion']})")
+forecast = spark.table(config.FCT_DEMAND_FORECAST).toPandas()
+print(f"forecast rows: {len(forecast):,}  weeks "
+      f"{forecast.week_end_date.min()} .. {forecast.week_end_date.max()}")
+print(forecast.head(6).to_string(index=False))
 spark.sql(f"""
 SELECT week_end_date, COUNT(*) AS series,
        ROUND(SUM(forecast_p50)) AS total_p50, ROUND(SUM(forecast_p90)) AS total_p90
 FROM {config.FCT_DEMAND_FORECAST} GROUP BY week_end_date ORDER BY week_end_date
 """).show(20, truncate=False)
+
+# %% [markdown]
+# ### Parity: keys-only `score_batch` vs. the estimators called directly
+#
+# The old path joined 35 columns by hand and called the estimator. Repeat it on a
+# sample of series and require the registered model to reproduce it. Any difference
+# would be exactly the skew this section exists to remove.
+
+# %%
+sample_keys = (
+    forecast[["sku_id", "retailer_code"]].drop_duplicates().sample(500, random_state=7)
+)
+fwd = (
+    spark.table(config.FEATURE_TABLE).filter(F.col("week_end_date") == F.lit(W_LAST))
+    .toPandas().merge(sample_keys, on=["sku_id", "retailer_code"])
+)
+fwd = fwd.loc[fwd.index.repeat(H)].copy()
+fwd["horizon"] = np.tile(np.arange(1, H + 1), len(fwd) // H)
+fwd["origin_week"] = pd.to_datetime(fwd["week_end_date"])
+
+X_fwd = build_matrix(fwd, MODEL_FEATURES, CATEGORICAL, LEVELS)
+p50_ref = np.clip(champ_obj.predict(X_fwd), 0, None)
+if USE_NATIVE_P90:
+    p90_ref = np.maximum(np.clip(q_model.predict(X_fwd), 0, None), p50_ref)
+else:
+    p90_ref = apply_q90(p50_ref, fwd["horizon"].to_numpy(), champ_q90_tbl)
+ref = pd.DataFrame({
+    "sku_id": fwd["sku_id"].to_numpy(), "retailer_code": fwd["retailer_code"].to_numpy(),
+    "horizon": fwd["horizon"].to_numpy(),
+    "ref_p50": np.round(p50_ref, 2), "ref_p90": np.round(p90_ref, 2),
+})
+cmp = forecast.merge(ref, on=["sku_id", "retailer_code", "horizon"])
+d50 = (cmp.forecast_p50 - cmp.ref_p50).abs().max()
+d90 = (cmp.forecast_p90 - cmp.ref_p90).abs().max()
+print(f"rows compared        : {len(cmp):,}")
+print(f"max |p50 difference| : {d50:.4f}")
+print(f"max |p90 difference| : {d90:.4f}")
+assert len(cmp) == len(ref) and d50 < 0.02 and d90 < 0.02, "score_batch diverges from estimator"
+print("score_batch reproduces the estimator output from keys alone.")
 
 # %% [markdown]
 # ## 14. Holdout forecast-vs-actual table
@@ -1362,10 +1551,10 @@ ORDER BY combined_revenue_at_risk_usd DESC LIMIT 10
 # What is different here is what surrounds the model:
 #
 # * **Governed features, not a CSV.** `ml.demand_features_weekly` is a Unity
-#   Catalog table with a primary key, a timeseries column, comments and grants.
-#   The training set was assembled through a `FeatureLookup`, so the
-#   point-in-time join is declared once and reused at inference rather than
-#   reimplemented in a scoring script.
+#   Catalog table with a composite primary key, comments and grants. The
+#   training set was assembled through a `FeatureLookup`, so the join is declared
+#   once and `fe.score_batch` reuses it at inference from keys alone, rather than
+#   reimplementing it in a scoring script.
 # * **Lineage from landing file to prediction.** `_source_file` on the Bronze row
 #   survives into Gold; Gold feeds the feature table; the feature table feeds the
 #   model; the model writes `gold.fct_demand_forecast`. That chain is queryable
@@ -1373,8 +1562,9 @@ ORDER BY combined_revenue_at_risk_usd DESC LIMIT 10
 # * **Open format, no export step.** The model is MLflow-flavoured in UC with
 #   `@champion` / `@challenger` aliases. Promotion is an alias move, not a
 #   re-export and re-deploy, and nothing downstream references a version number.
-# * **One platform for the next three stages.** The same registered model is
-#   called by a serving endpoint, reasoned over by an agent, served to an app
+# * **One platform for the next three stages.** The same fitted model, registered
+#   as a feature-backed version for batch and a plain twin for the real-time
+#   endpoint, is reasoned over by an agent, served to an app
 #   through Lakebase and queried in natural language through Genie — without
 #   leaving the governance boundary or handing a pickle to another system.
 # * **The governance already applies to it.** The row filter and column mask from

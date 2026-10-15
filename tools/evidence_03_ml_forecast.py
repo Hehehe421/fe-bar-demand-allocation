@@ -12,7 +12,7 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
-from tools.dbsql import table  # noqa: E402
+from tools.dbsql import sql, table  # noqa: E402
 
 HOST = "https://fevm-stable-classic-pqjg18.cloud.databricks.com"
 C = "toy_demand_allocation"
@@ -99,9 +99,11 @@ FROM {C}.ml.demand_features_weekly
     a("exact record of one execution rather than an accumulation across runs.")
     a("")
     lb = pathlib.Path("evidence/metrics/forecast_leaderboard.csv")
+    rows: list[dict[str, str]] = []
     if lb.exists():
         with lb.open() as fh:
             rows = list(csv.DictReader(fh))
+    if rows:
         cols = ["rank", "algorithm", "family", "wape_pct", "mape_nonzero_pct",
                 "bias_pct", "rmse", "pinball_p50", "pinball_p90",
                 "p90_coverage_pct", "train_seconds", "run_id"]
@@ -112,17 +114,32 @@ FROM {C}.ml.demand_features_weekly
     a("")
     a("**WAPE is the headline** because it is volume-weighted and therefore stable")
     a("on intermittent series. The `mape_nonzero_pct` column shows why a per-row")
-    a("MAPE average is not usable here — 183% to 406% — since it is dominated by")
+    mapes = [float(r["mape_nonzero_pct"]) for r in rows]
+    a(f"MAPE average is not usable here — {min(mapes):.0f}% to {max(mapes):.0f}% — since it is dominated by")  # noqa: E501
     a("near-zero denominators on slow sellers. It is reported because buyers ask")
     a("for it, and the gap between the two is itself the argument.")
     a("")
     a("Three findings worth stating:")
     a("")
-    a("1. **Gradient boosting wins decisively** — 67.4% WAPE against a 95.3%")
-    a("   seasonal-naive baseline, a 28.0-point / 29.4% relative improvement.")
-    a("2. **Four of seven candidates barely beat or lose to the baseline.** Ridge,")
-    a("   RandomForest and sklearn's `HistGradientBoosting` all land in the 90s.")
-    a("   Not every family suits this problem and the leaderboard says so.")
+    by_algo = {r["algorithm"]: float(r["wape_pct"]) for r in rows}
+    champ_row = rows[0]
+    champ_w = float(champ_row["wape_pct"])
+    base_w = by_algo["seasonal_naive"]
+    weak = [a_ for a_, w_ in by_algo.items()
+            if a_ not in (champ_row["algorithm"], "seasonal_naive") and w_ > base_w - 10]
+    a(f"1. **Gradient boosting wins decisively** — {champ_w:.1f}% WAPE ({champ_row['algorithm']}) against a {base_w:.1f}%")  # noqa: E501
+    a(f"   seasonal-naive baseline, a {base_w - champ_w:.1f}-point / {100 * (base_w - champ_w) / base_w:.1f}% relative improvement.")  # noqa: E501
+    a("   Across three executions of this notebook the champion's WAPE was 67.36%,")
+    a("   67.56% and 67.42%: a ~0.2-point run-to-run spread from multi-threaded")
+    a("   LightGBM. The ranking at the top never changed; quote the headline as")
+    a("   'about 67.4%', not to two decimals.")
+    a(f"2. **{len(weak)} candidates ({', '.join(f'`{w_}`' for w_ in weak)}) land within 10 points of the")  # noqa: E501
+    a("   baseline or worse.** Not every family suits this problem and the")
+    a("   leaderboard says so. `sklearn_hist_gbm` in particular is unstable under")
+    a(f"   Poisson loss: {by_algo['sklearn_hist_gbm']:.1f}% on this run against 93.0% on the previous one,")  # noqa: E501
+    a("   with identical hyperparameters and the same hash-selected training rows;")
+    a("   the join feeding it was the only change. The cause was not isolated. It")
+    a("   is reported as measured, not tuned until it behaves.")
     a("3. **The first version of this sweep was useless and the reason is")
     a("   instructive.** See §3.")
     a("")
@@ -183,17 +200,20 @@ GROUP BY ALL ORDER BY wape_pct
     a(table(q_lf))
     a("```")
     a("")
+    cols_lf, rows_lf = sql(q_lf)
+    fam = {r[0]: dict(zip(cols_lf, r, strict=True)) for r in rows_lf}
+    ev, st, ft = fam["EVERGREEN"], fam["SOCIAL_TREND"], fam["FILM_TIE_IN"]
     a("This is the most useful table in the stage:")
     a("")
-    a("* **`EVERGREEN` forecasts at 20.5% WAPE with +1.2% bias and 92.0% p90")
+    a(f"* **`EVERGREEN` forecasts at {float(ev['wape_pct']):.1f}% WAPE with {float(ev['bias_pct']):+.1f}% bias and {float(ev['p90_coverage_pct']):.1f}% p90")  # noqa: E501
     a("  coverage.** On predictable demand the model is genuinely good and the")
     a("  interval is calibrated.")
-    a("* **`SOCIAL_TREND` forecasts at 110.2% WAPE with 74.7% p90 coverage.** Viral")
+    a(f"* **`SOCIAL_TREND` forecasts at {float(st['wape_pct']):.1f}% WAPE with {float(st['p90_coverage_pct']):.1f}% p90 coverage.** Viral")  # noqa: E501
     a("  spikes are close to unforecastable from history, *and* the upper quantile")
-    a("  under-covers by 15 points precisely where cover matters most. Anyone")
+    a(f"  under-covers by {90 - float(st['p90_coverage_pct']):.0f} points precisely where cover matters most. Anyone")  # noqa: E501
     a("  claiming a single portfolio accuracy number for this business is hiding")
     a("  this row.")
-    a("* **`FILM_TIE_IN` sits between, over-forecasting by 36%** — release windows")
+    a(f"* **`FILM_TIE_IN` sits between, over-forecasting by {float(ft['bias_pct']):.0f}%** — release windows")  # noqa: E501
     a("  are partly predictable, and the model errs long.")
     a("")
     a("The operational consequence is specific: the p90 drives `fct_stockout_risk`,")

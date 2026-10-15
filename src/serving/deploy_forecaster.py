@@ -27,21 +27,28 @@ precisely the training/serving skew the feature layer exists to prevent.
     python -m src.serving.deploy_forecaster --query-only  # skip the deploy
     FORECASTER_ENDPOINT=<name> python -m src.serving.deploy_forecaster --query-only
 
-KNOWN ISSUE: the `deploy()` path here reached `UPDATE_FAILED` on first attempt.
-The endpoint was created and went IN_PROGRESS, then the config update failed;
-the query then correctly reported "endpoint is not ready to serve traffic yet"
-rather than inventing a result. Root cause not yet established -- read the
-served-entity build logs (`databricks serving-endpoints get <name>` plus the
-build logs) before changing any config, because a blind retry teaches nothing.
+ROOT CAUSE of the original UPDATE_FAILED (resolved): the endpoint was pointed at a
+model logged with `fe.log_model`. Model Serving reads the feature-lookup spec in
+that artifact and tries to set up an online feature store, which this build
+deliberately does not have -- served-entity state "Online feature store setup
+failed". A second, independent defect sat behind it: the bare estimator could not
+have produced a correct forecast anyway, because the target-week calendar columns,
+category levels and p90 all lived outside it.
 
-The likely cause is the feature-store backing: `fe.log_model` pins
-`databricks-feature-engineering` and the serving container has to resolve a
-feature-backed model, which may be attempting an online-store lookup that does
-not exist here, or failing on dependency resolution the way the Stage C2
-endpoint did on `httpx`. If so, the clean fix is to log the same fitted
-estimator a second time as a plain sklearn/pyfunc model for the real-time
-endpoint and keep the feature-backed version for `fe.score_batch` -- same
-lineage, no online store, no serving-time lookup.
+A THIRD defect only showed once the first two were fixed: the rt model's
+`pip_requirements` were copied from the training runtime, which ships pandas 1.5.3.
+That has no Python 3.12 wheel, so the serving image tried to compile it from source
+and the container build failed in ~100 s (`No module named 'pkg_resources'`). Two
+lessons: (1) never pin serving dependencies from `pd.__version__` of a Databricks
+ML runtime; (2) a failed build is only reported after a ~25 min queue, so validate
+the pins first. Notebook 03 now rebuilds the model's requirements in a fresh
+Python 3.12 virtualenv and compares forecasts before anything is deployed.
+
+The endpoint therefore serves `config.MODEL_NAME_RT`: the same fitted estimators
+wrapped in `forecasting.pyfunc_model.DemandForecaster` (matrix construction + p50 +
+p90) and logged as a plain pyfunc with a signature and no feature lineage. Batch
+scoring keeps using the feature-backed `config.MODEL_NAME` through `fe.score_batch`.
+Promotion is an alias move on both models.
 
 `query()` and `feature_row()` are independent of `deploy()` and work against any
 ready endpoint, which is what `--query-only` plus FORECASTER_ENDPOINT is for.
@@ -57,6 +64,8 @@ import time
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 
+import os
+
 from databricks.sdk import WorkspaceClient  # noqa: E402
 from databricks.sdk.service.serving import (  # noqa: E402
     EndpointCoreConfigInput,
@@ -65,12 +74,12 @@ from databricks.sdk.service.serving import (  # noqa: E402
 
 import src.config as config  # noqa: E402
 
-import os
+CATEGORICAL = ("brand", "category", "license_family", "lifecycle_stage", "channel")
 
 # Override to point at an endpoint created elsewhere, e.g.
 #   FORECASTER_ENDPOINT=demand_forecaster python -m src.serving.deploy_forecaster --query-only
-ENDPOINT = os.environ.get("FORECASTER_ENDPOINT", "toy-demand-forecaster")
-MODEL = config.MODEL_NAME
+ENDPOINT = os.environ.get("FORECASTER_ENDPOINT", config.FORECASTER_ENDPOINT)
+MODEL = config.MODEL_NAME_RT
 ALIAS = config.CHAMPION_ALIAS
 
 
@@ -89,7 +98,7 @@ def champion_version(w: WorkspaceClient) -> int:
 def deploy(w: WorkspaceClient, version: int) -> None:
     """Create or update the endpoint. Scale-to-zero: idle cost ~0."""
     entity = ServedEntityInput(
-        name=f"forecaster-{version}",
+        name=f"forecaster-rt-{version}",
         entity_name=MODEL,
         entity_version=str(version),
         workload_size="Small",
@@ -157,8 +166,15 @@ def feature_row() -> dict:
         """
     )
     row = dict(zip(cols, rows[0], strict=True))
-    payload = {k: v for k, v in row.items() if k not in ("week_end_date",)}
+    payload = {k: v for k, v in row.items() if k != "week_end_date"}
     payload["origin_week"] = str(row["week_end_date"])
+    payload["horizon"] = 1
+    # the SQL statement API returns every value as a string; the model signature
+    # wants doubles for features and an int for the horizon
+    keep_str = {"sku_id", "retailer_code", "origin_week", *CATEGORICAL}
+    for k, v in payload.items():
+        if k not in keep_str:
+            payload[k] = None if v is None else float(v)
     payload["horizon"] = 1
     return payload
 
