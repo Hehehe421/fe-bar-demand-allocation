@@ -6,6 +6,30 @@ evidence file against the "Evidence →" line for its stage; and live checks of 
 regex was too loose it is called out. The deck, `docs/TALK_TRACK.md`, `ARCHITECTURE.md` and
 `BUSINESS_CASE.md` are excluded by request (built last).
 
+## 0. Status after the follow-up work (same day, later)
+
+The audit below is kept as written; this section records what changed since.
+
+| ID | Status | What was done / what remains |
+|---|---|---|
+| G1 | **OPEN, needs a decision** | Customer name still in the history of two pushed public commits. Options: a fresh repo with a clean history (safe, loses the commit history), or a history rewrite plus force-push (needs your explicit go-ahead; the force-push rule is about main/master, and this is main). |
+| G2 | **Fixed** | Both input hints replaced by visible labels; the sentence in HANDOFF reworded. A fresh grep over every tracked and untracked file (notebooks included) returns zero hits. |
+| G3 | **Fixed** | Genie revision 3: business and KPI instructions, metric views marked preferred, synonyms, 8 examples, 7 joins, 13 objects, 24 benchmarks. 26 questions incl. the 4 named, 3 full passes, 78/78. No new failure occurred, so none is recorded; the earlier q11 failure and its measured fix stand. `evidence/06_genie.md`. |
+| G4 | **Fixed** | 4 synced tables ONLINE, UC = Postgres row-for-row, each with a reader in the app. `evidence/05_lakebase.md`, `02b_lineage.md` §5. |
+| G5 | **OPEN** | `databricks.yml` (DAB, dev/prod) and notebook `05_lakebase_serving` not started. |
+| G6 | **Fixed** except one item | KPI header from Lakebase with week-over-week deltas, brand filter, demand history, inbound ETAs, trace id; `app.yaml`, resource bindings, a real-session log and a deployed-app smoke test with pre/post counts are in `evidence/07_app.md`. **Units and revenue at risk have no delta** because no prior snapshot is kept. |
+| G7 | **Downgraded, and an evidence error corrected** | `SCOPE.md` lists the as-of `FeatureLookup` as P1 (stretch), so it is optional; BUILD_PROMPT §C1 still says "so point-in-time correctness and feature lineage are demonstrable". While answering your question I found that `evidence/03_ml_forecast.md` claimed `origin_week` was "the timestamp lookup key, so the point-in-time join is declared once". The notebook says the opposite (deliberately no timeseries column). The evidence now says exact-key lookup, not as-of. |
+| G8 | **Fixed** | `evidence/02b_lineage.md`: landing file → bronze → silver → gold → feature table → model (registry dependencies) → forecast → risk → four synced tables → write-back, generated from system tables, the model registry and the synced-table API. |
+| G9 | **OPEN** | README outcome table; shares inputs with the business case (deck-side). |
+| G10 | **Mostly fixed** | Stockout-weeks and compliance chargebacks are shown (baseline tiles; chargebacks also in the header). p90 coverage, air freight and lost sales remain, as honest extras. |
+| G11 | **Mostly fixed** | Headers added to 06 and 07. Evidence 02 still shows tags from `information_schema`, and 05 still prose-describes part of the OLTP write path. |
+| G12 | **Fixed** | HANDOFF trap 22 and the stage table corrected. |
+| G13, G14 | open, optional | |
+
+New findings from this round: `evidence/03` overclaim (above); the app's SKU-detail callback returned HTTP 500 on first
+deploy and was caught only by the deployed-app test; `/healthz` is answered by the platform proxy; Lakebase holds one
+more decision than Unity Catalog (a hand-made test, id 33) until the write-back job runs.
+
 ## 1. The final checklist (§11), line by line
 
 | # | Line | Result | Note |

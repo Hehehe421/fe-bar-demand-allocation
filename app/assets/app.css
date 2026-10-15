@@ -142,3 +142,11 @@ a:focus, button:focus-visible, input:focus-visible { outline: 3px solid #9ec5f4;
 .card-s, .k-card, .hero, .pcard { overflow-x: clip; }
 .app-header { overflow-x: clip; }
 html, body { max-width: 100%; overflow-x: hidden; }
+
+/* ---------- header KPI strip (every tab) ---------- */
+.kpi-strip-wrap { margin: 14px 0 6px 0; }
+.kpi-strip-wrap .k-card { padding: 11px 14px; }
+.kpi-strip-wrap .k-value { font-size: 25px; margin: 2px 0 3px 0; }
+.kpi-strip-wrap .k-sub { font-size: 12px; }
+.delta { font-size: 12px; font-weight: 600; white-space: normal; }
+.d-good { color: #0a7d0a; } .d-bad { color: #b42318; } .d-flat, .d-none-prior { color: var(--text-muted); font-weight: 500; }

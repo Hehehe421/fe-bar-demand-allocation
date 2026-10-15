@@ -607,6 +607,19 @@ measures:
 $$
 """.strip()
 
+#: Mean weekly POS units over the last 13 weeks, per SKU x DC. Weeks of supply needs demand as
+#: well as the position snapshot, and this is the demand side. Defined here, once, so the metric
+#: view is the only place the denominator lives.
+AGG_TRAILING_DEMAND = f"""
+CREATE OR REPLACE TABLE {GOLD}.agg_trailing_demand
+COMMENT 'Mean weekly POS units over the last 13 weeks at SKU x DC: the demand denominator of
+weeks of supply. Read by gold.mv_weeks_of_supply. SYNTHETIC DATA.'
+AS SELECT sku_id, dc_code, SUM(pos_units) / 13.0 AS mean_weekly_pos_units_13w
+   FROM {GOLD}.fct_demand_weekly
+   WHERE week_end_date > date_sub((SELECT MAX(week_end_date) FROM {GOLD}.fct_demand_weekly), 91)
+   GROUP BY sku_id, dc_code
+""".strip()
+
 MV_WEEKS_OF_SUPPLY = f"""
 CREATE OR REPLACE VIEW {GOLD}.mv_weeks_of_supply
 WITH METRICS LANGUAGE YAML AS $$
@@ -622,6 +635,9 @@ joins:
   - name: prod
     source: {CATALOG}.gold.dim_product
     on: source.sku_id = prod.sku_id
+  - name: dem
+    source: {CATALOG}.gold.agg_trailing_demand
+    on: source.sku_id = dem.sku_id AND source.dc_code = dem.dc_code
 dimensions:
   - name: DC
     expr: source.dc_code
@@ -636,6 +652,14 @@ dimensions:
   - name: Category
     expr: prod.category
 measures:
+  - name: Weeks Of Supply
+    expr: SUM(source.on_hand_units) / NULLIF(SUM(dem.mean_weekly_pos_units_13w), 0)
+    comment: >-
+      Latest on-hand units divided by mean weekly POS units over the last 13 weeks.
+      A ratio of sums, so it aggregates correctly to any grouping.
+  - name: Weekly Demand Units
+    expr: SUM(dem.mean_weekly_pos_units_13w)
+    comment: Mean weekly POS units over the last 13 weeks (the denominator).
   - name: On Hand Units
     expr: SUM(source.on_hand_units)
   - name: In Transit Units
@@ -712,6 +736,7 @@ $$
 def apply_metric_views(results: list[tuple[str, str, str]], include_forecast: bool) -> None:
     _run("CREATE mv_fill_rate", MV_FILL_RATE, results)
     _run("CREATE mv_otif", MV_OTIF, results)
+    _run("CREATE agg_trailing_demand", AGG_TRAILING_DEMAND, results)
     _run("CREATE mv_weeks_of_supply", MV_WEEKS_OF_SUPPLY, results)
     if include_forecast:
         _run("CREATE mv_forecast_accuracy", MV_FORECAST_ACCURACY, results)
@@ -729,6 +754,13 @@ def apply_metric_views(results: list[tuple[str, str, str]], include_forecast: bo
 def main() -> int:
     include_forecast = "--with-forecast" in sys.argv
     results: list[tuple[str, str, str]] = []
+
+    if "--weeks-of-supply-only" in sys.argv:       # re-apply just the demand table + metric view
+        _run("CREATE agg_trailing_demand", AGG_TRAILING_DEMAND, results)
+        _run("CREATE mv_weeks_of_supply", MV_WEEKS_OF_SUPPLY, results)
+        for label, status, err in results:
+            print(f"  {status:8} {label} {err[:200] if status != 'OK' else ''}")
+        return 1 if any(r[1] == "FAILED" for r in results) else 0
 
     print("applying comments ...")
     apply_comments(results)

@@ -22,6 +22,18 @@ EXPERIMENT = "/Users/sixuan.he@databricks.com/toy_demand_allocation_forecast"
 CLUSTER = "1008-205814-qhbfm7tc"
 
 
+NOTE_LOOKUP = [
+    "The training set is assembled through a `FeatureLookup` on the exact key",
+    "(`sku_id`, `retailer_code`, `origin_week`), declared once and reused at inference",
+    "instead of being reimplemented in a scoring script. **This is an exact-key lookup,",
+    "not an as-of (point-in-time) join:** the feature table deliberately has no",
+    "timeseries column. The leakage guard is the frame instead (features are computed",
+    "at the origin week, the label is taken from origin + h, and the holdout is a",
+    "single origin). A timeseries `FeatureLookup`, which the build prompt describes in",
+    "Stage C1, is not implemented; `docs/RUBRIC_AUDIT.md` (G7) records that.",
+]
+
+
 def main() -> int:
     out: list[str] = []
     a = out.append
@@ -82,10 +94,9 @@ FROM {C}.ml.demand_features_weekly
 """))
     a("```")
     a("")
-    a("The training set is assembled through a `FeatureLookup` keyed on")
-    a("(`sku_id`, `retailer_code`) with `origin_week` as the timestamp lookup key, so")
-    a("the point-in-time join is declared once and reused at inference instead of")
-    a("being reimplemented in a scoring script. `retailer_code` is deliberately a")
+    for line in NOTE_LOOKUP:
+        a(line)
+    a("`retailer_code` is deliberately a")
     a("primary key of the feature table rather than a feature column — including it")
     a("as both makes `create_table` fail with `COLUMN_ALREADY_EXISTS`.")
     a("")

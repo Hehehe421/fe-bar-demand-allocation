@@ -1,3 +1,4 @@
+# ruff: noqa: E501  (evidence prose is kept as readable sentences)
 """Generate evidence/06_genie.md from the recorded Genie runs.
 
     python tools/evidence_06_genie.py
@@ -47,6 +48,8 @@ def sql_block(s: str | None) -> list[str]:
 
 def main() -> int:
     r1, r1b, r2 = load("rev1"), load("rev1b"), load("rev2")  # noqa: F841
+    r3 = load("rev3")
+    r3_passes = [r3] + [load(t) for t in ("rev3b", "rev3c") if (M / f"genie_run_{t}.json").exists()]
     stab = json.loads((M / "genie_q11_stability.json").read_text())
     state = json.loads((M / "genie_space.json").read_text())
     sid = state["space_id"]
@@ -68,34 +71,48 @@ def main() -> int:
     a(f"| Space | `{sp.get('title')}` — `{sid}` |")
     a(f"| URL | {config.WORKSPACE_HOST}/genie/rooms/{sid} |")
     a(f"| Warehouse | `{config.WAREHOUSE_ID}` |")
+    a(f"| Unity Catalog | `{config.CATALOG}.gold` (tables and metric views the space reads) |")
     a("")
-    a("## 1. What was built")
+    a("## 1. What is configured now (revision 3)")
     a("")
-    a("A deliberately small surface: **4 Gold tables and the 4 governed metric views**, "
-      "not all 20 objects in the catalog. Ratio KPIs (fill rate, OTIF, WAPE, weeks of supply) "
-      "live in the metric views, so Genie is steered to `MEASURE()` by curation, not by prose.")
+    a("Revision 3 is the configuration the build prompt specifies. It follows two earlier, deliberately "
+      "thin revisions (sections 3-5), which were an experiment in curation first and instructions "
+      "only to patch an observed failure; that experiment is kept because it produced the q11 finding. "
+      "Revision 3 adds what the rubric asks for on top of the same curation.")
     a("")
+    tabs = ss["data_sources"]["tables"]
+    syn = sum(1 for t in tabs for c in t.get("column_configs", []) if c.get("synonyms"))
     a("```text")
-    for t in ss["data_sources"]["tables"]:
+    for t in tabs:
         a(f"{t['identifier']:62} {len(t.get('column_configs', []))} column configs")
     a("```")
     a("")
-    a(f"Stored in the space (read back with `include_serialized_space=true`): "
+    a(f"**{len(tabs)} objects** (9 Gold tables, 4 governed metric views), **{syn} columns with synonyms**, "
       f"{len(ins.get('example_question_sqls', []))} curated example queries, "
       f"{len(ins.get('join_specs', []))} join specs, "
       f"{len(ins.get('sql_snippets', {}).get('filters', []))} filter and "
       f"{len(ins.get('sql_snippets', {}).get('measures', []))} measure snippets, "
       f"{len(ss.get('benchmarks', {}).get('questions', []))} benchmarks, "
-      f"{len(ss.get('config', {}).get('sample_questions', []))} sample questions.")
+      f"{len(ss.get('config', {}).get('sample_questions', []))} sample questions. All read back from the "
+      f"live space with `include_serialized_space=true`, not from what was sent.")
     a("")
-    a("General instructions are **two lines of orientation**. That is intentional and "
-      "follows the fix order in the `genie-rooms` skill (data → metadata → joins → example "
-      "SQL → general instructions last): instructions grow only to patch a failure "
-      "actually observed, below.")
+    a("**General instructions** describe the business, define every KPI the build prompt names (fill rate on "
+      "the REQUESTED basis, OTIF, WAPE, weeks of supply, stockout-weeks, chargebacks) and mark the "
+      "metric views as the preferred source for ratio KPIs:")
     a("")
     a("```text")
     a("".join(ins["text_instructions"][0]["content"]).strip())
     a("```")
+    a("")
+    a("**Curated example queries** (they are deliberately *different* from the scored questions: other "
+      "retailers, thresholds and quarters, because teaching Genie the exact test would make the score "
+      "meaningless):")
+    a("")
+    for ex in ins.get("example_question_sqls", []):
+        a(f"* {ex['question'][0]}")
+    a("")
+    a("**Synonyms** include units / eaches / POS units, fill rate / service level, OTIF / on-time in-full, "
+      "and retailer code <-> readable label (`dim_retailer_dc.retailer_label`).")
     a("")
     a("**Governance carries through.** `dim_product.unit_cost_usd` and `gross_margin_pct` "
       "are masked by Unity Catalog for every identity but finance, including the catalog "
@@ -112,10 +129,14 @@ def main() -> int:
     a("")
     a("## 2. How answers were scored")
     a("")
-    a("13 questions, each in its own Conversation-API conversation. For each, the SQL Genie "
+    a(f"{len(r3['results'])} questions, each in its own Conversation-API conversation. For each, the SQL Genie "
       "generated and its rows are captured, then compared with a **reference query written "
       "before the run** (`src/genie/questions.py`): same row count, and every reference row "
-      "found in Genie's rows within 1%. So a verdict is a data comparison, not a read-through.")
+      "found in Genie's rows within 1% (`rows`). Questions whose natural answer is a list, a top-1 or a "
+      "set of numbers use a looser, named check: `scalar` (first value within 1%), `top1` (Genie's first "
+      "row contains the reference's top row), `values` (every reference number appears in Genie's "
+      "numbers, row count and label format free), and `refusal` (a masked column must come back NULL). "
+      "So a verdict is a data comparison, not a read-through.")
     a("")
     a("## 3. First run (instruction revision 1): 9 of 12 flagged PASS, and what the 3 were")
     a("")
@@ -189,7 +210,7 @@ def main() -> int:
       f"is misleading), and the numbers are here so the claim is exactly as strong as the "
       f"evidence.")
     a("")
-    a("## 5. Final results, revision 2 — 13 of 13")
+    a("## 5. Revision 2 results (the q11 fix), 13 of 13")
     a("")
     a("| # | question | verdict | seconds | Genie used |")
     a("|---|---|---|---|---|")
@@ -229,17 +250,76 @@ def main() -> int:
         for r in r2b["results"]:
             a(f"| {r['question']} | {r['verdict']} | {r['seconds']} |")
         a("")
-    a("## 6. What this does and does not show")
+    a("## 6. Revision 3: the specified configuration")
+    a("")
+    a(f"The first time revision 3 ran, it answered **{sum(r['verdict'] == 'PASS' for r in r3['results'])} of "
+      f"{len(r3['results'])}** correctly. That includes the 15 questions of revisions 1-2 (no regression) and 11 new "
+      f"ones: the **four questions the build prompt names** (q15-q18), the remaining required KPIs "
+      f"(weeks of supply, chargebacks, stockout-weeks), inbound ETA slip, a brand entity-match, a portfolio "
+      f"forecast that must not come from the at-risk-only table (q24), and a second masked-column question "
+      f"(q25). **There was no new failure to record in this pass**, and none has been invented. "
+      f"Because Genie is non-deterministic, the whole set was run again:")
+    a("")
+    keys = [r["key"] for r in r3["results"]]
+    maps = [by_key(x) for x in r3_passes]
+    a("| # | question | " + " | ".join(f"pass {i + 1}" for i in range(len(maps))) + " | check |")
+    a("|---|---|" + "---|" * len(maps) + "---|")
+    from src.genie.questions import QUESTIONS
+    chk = {q.key: q.check for q in QUESTIONS}
+    for k in keys:
+        a(f"| {k.split('_')[0]} | {maps[0][k]['question'][:84]} | "
+          + " | ".join(m[k]["verdict"] for m in maps if k in m) + f" | {chk.get(k, '')} |")
+    tot = [sum(m[k]["verdict"] == "PASS" for k in keys) for m in maps]
+    a("")
+    a(f"Passes: {', '.join(f'{t}/{len(keys)}' for t in tot)} across {len(maps)} full runs "
+      f"({sum(tot)} of {len(keys) * len(maps)} answers). Timing, per question: "
+      f"median {sorted(r['seconds'] for r in r3['results'])[len(keys) // 2]:.0f} s.")
+    a("")
+    a("**Two things that look like passes and are worth reading closely:**")
+    a("")
+    q18 = by_key(r3)["q18_overrides_last_week"]
+    a("* **q18 passed by coincidence of interpretation.** \"Last week\" is ambiguous. The reference uses the "
+      "calendar week before today on `decided_at`; Genie used the latest override `week_end_date` "
+      f"(2026-10-03). Today both select the same {q18.get('genie_row_count')} rows, so the verdict is PASS, "
+      "but they are different rules and will disagree as the calendar moves. The reference window is "
+      "relative to the run date.")
+    a("* **q15 and q17 are strict only where they are checked.** q15's reference is 287 distinct SKUs and "
+      "Genie returned 287 rows (the row-count check is the strong one); q17 is a `top1` check, so it proves "
+      "the worst family is first, not that the rest of the ordering is right.")
+    a("")
+    a("### Generated SQL and rows, revision 3 (first pass)")
+    a("")
+    for r in r3["results"]:
+        if int(r["key"][1:3]) < 15:
+            continue
+        a(f"#### {r['key']}")
+        a(f"**{r['question']}**  — _{r['why']}_")
+        a("")
+        out.extend(sql_block(r.get("genie_sql")))
+        a("")
+        a("```text")
+        a(f"Genie    : {r.get('genie_columns')} {r.get('genie_rows', [])[:5]}  ({r.get('genie_row_count')} rows)")
+        a(f"Reference: {r.get('reference_columns')} {r.get('reference_rows', [])[:5]}")
+        a(f"Verdict  : {r['verdict']} — {r['detail']}")
+        a("```")
+        if r.get("genie_text"):
+            a(f"> {r['genie_text'][:420]}")
+        a("")
+    a("## 7. What this does and does not show")
     a("")
     a("* Genie answered the governed KPI questions (WAPE, P90 coverage, fill rate, OTIF) "
       "through `MEASURE()` on the metric views, so the numbers equal those in the notebooks "
       "and evidence — one definition, not one per tool.")
     a("* It respected the column mask: asked for a margin it could not see, it said so "
       "instead of estimating one.")
-    a("* It is not reliable on table choice when two tables carry a similarly named column "
+    a("* In revision 2 it was not reliable on table choice when two tables carry a similarly named column "
       "(q11). Curation reduced that; it did not provably eliminate it. A production space "
       "would keep the benchmark set and re-run it on every change.")
-    a("* 13 questions is a smoke test, not an accuracy study.")
+    a(f"* {len(keys)} questions, run {len(maps)} times, is a smoke test with a repeat, not an accuracy study. "
+      "Passing every one is a result about this question set, not a guarantee about the next question.")
+    a("* The examples in the space were written to be different from the scored questions, but they are "
+      "written by the same person who wrote the questions, so the separation is by intent, not by an "
+      "independent party.")
     pathlib.Path("evidence/06_genie.md").write_text("\n".join(out) + "\n")
     print(f"wrote evidence/06_genie.md ({len(out)} lines)  rev1 fails={f1}/{n1}  rev2 fails={f2}/{n2}  p={p:.3f}")  # noqa: E501
     return 0

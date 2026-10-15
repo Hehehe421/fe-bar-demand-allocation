@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import csv
 import json
+import logging
 import pathlib
 import re
 import threading
@@ -30,6 +31,9 @@ import settings as S
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.sql import StatementParameterListItem, StatementState
 from psycopg.rows import dict_row
+
+log = logging.getLogger("acc")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [acc] %(message)s")
 
 _w: WorkspaceClient | None = None
 _lock = threading.Lock()
@@ -78,7 +82,7 @@ def _pg_rows(query: str, params: tuple | list = ()) -> list[dict[str, Any]]:
 
 
 def worklist(scope: str | None, tiers: list[str], limit: int = 250,
-             family: str | None = None) -> list[dict[str, Any]]:
+             family: str | None = None, brand: str | None = None) -> list[dict[str, Any]]:
     """At-risk rows ranked by severity, each with the planner's latest decision."""
     return _pg_rows(
         """
@@ -95,10 +99,12 @@ def worklist(scope: str | None, tiers: list[str], limit: int = 250,
         WHERE (%(scope)s::text IS NULL OR r.retailer_code = %(scope)s::text)
           AND r.risk_tier = ANY(%(tiers)s)
           AND (%(family)s::text IS NULL OR r.license_family = %(family)s::text)
+          AND (%(brand)s::text IS NULL OR r.brand = %(brand)s::text)
         ORDER BY r.severity_score DESC, r.sku_id
         LIMIT %(limit)s
         """,
-        {"scope": scope, "tiers": tiers or ["__none__"], "limit": limit, "family": family},
+        {"scope": scope, "tiers": tiers or ["__none__"], "limit": limit, "family": family,
+         "brand": brand},
     )
 
 
@@ -141,7 +147,7 @@ def sku_risk(sku: str, retailer: str) -> dict[str, Any] | None:
 def sku_forecast(sku: str, retailer: str) -> list[dict[str, Any]]:
     return _pg_rows(
         """
-        SELECT horizon, week_end_date, forecast_p50, forecast_p90, model_version, algorithm
+        SELECT horizon, origin_week, week_end_date, forecast_p50, forecast_p90, model_version, algorithm
         FROM public.forecast_next_13w WHERE sku_id = %s AND retailer_code = %s
         ORDER BY horizon
         """,
@@ -193,6 +199,9 @@ def save_decision(*, sku: str, retailer: str, week_end: str, recommended: int, p
         )
         new_id = cur.fetchone()["decision_id"]
         conn.commit()
+        log.info("lakebase INSERT allocation.allocation_decisions decision_id=%s %s/%s action=%s "
+                 "planner_units=%s recommended=%s trace_id=%s", new_id, sku, retailer, action,
+                 planner_units, recommended, trace_id)
         return int(new_id)
 
 
@@ -212,6 +221,7 @@ def save_interaction(*, sku: str | None, retailer: str | None, planner_id: str, 
              (prompt or "")[:200], in_tokens, out_tokens, latency_ms),
         )
         conn.commit()
+        log.info("lakebase INSERT allocation.agent_interactions trace_id=%s tools=%s", trace_id, tools)
 
 
 # --------------------------------------------------------------------------
@@ -317,6 +327,8 @@ def ask_agent(question: str) -> dict[str, Any]:
         "POST", f"/serving-endpoints/{S.AGENT_ENDPOINT}/invocations",
         body={"input": [{"role": "user", "content": question}]})
     ms = round((time.perf_counter() - t0) * 1000)
+    log.info("serving endpoint %s answered in %d ms (request id %s)", S.AGENT_ENDPOINT, ms,
+             (raw.get("databricks_output") or {}).get("databricks_request_id") or raw.get("id"))
     answer, calls, outputs, tool_errors = "", {}, [], []
     for item in raw.get("output", []):
         t = item.get("type")
@@ -387,6 +399,8 @@ def ask_genie(question: str) -> dict[str, Any]:
         if a.text is not None and a.text.content:
             out["text"] = a.text.content
     out["seconds"] = round(time.perf_counter() - t0, 1)
+    log.info("genie space %s answered in %.1fs, %d rows, sql=%s", S.GENIE_SPACE_ID, out["seconds"],
+             len(out["rows"]), bool(out["sql"]))
     return out
 
 
@@ -549,16 +563,106 @@ _info_cache: dict[str, dict[str, Any]] = {}
 
 
 def sku_info(skus: list[str]) -> dict[str, dict[str, Any]]:
-    """Catalog attributes for artwork and captions. Cached for the process lifetime."""
+    """Catalog attributes for artwork and captions. Cached for the process lifetime.
+
+    Read from the Lakebase ``product_lookup`` table (a masked-column-free projection of
+    ``dim_product``); the warehouse is only the fallback if Lakebase has no such row.
+    """
     need = [s for s in dict.fromkeys(skus) if s and s not in _info_cache]
     if need:
-        ids = ", ".join("'" + clean_id(s) + "'" for s in need)
-        cols, rows = _wh(
-            f"SELECT sku_id, product_name, brand, category, license_family, lifecycle_stage "
-            f"FROM {S.CATALOG}.gold.dim_product WHERE sku_id IN ({ids})")
-        for r in rows:
-            _info_cache[r[0]] = dict(zip(cols, r, strict=True))
+        ids = [clean_id(s) for s in need]
+        try:
+            for r in _pg_rows(
+                    "SELECT sku_id, product_name, brand, category, license_family, lifecycle_stage "
+                    "FROM public.product_lookup WHERE sku_id = ANY(%s)", (ids,)):
+                _info_cache[r["sku_id"]] = r
+        except Exception:  # noqa: BLE001
+            pass
+        missing = [i for i in ids if i not in _info_cache]
+        if missing:
+            lst = ", ".join("'" + i + "'" for i in missing)
+            cols, rows = _wh(
+                f"SELECT sku_id, product_name, brand, category, license_family, lifecycle_stage "
+                f"FROM {S.CATALOG}.gold.dim_product WHERE sku_id IN ({lst})")
+            for r in rows:
+                _info_cache[r[0]] = dict(zip(cols, r, strict=True))
     return {s: _info_cache[s] for s in skus if s in _info_cache}
+
+
+def brands() -> list[str]:
+    """Brands for the worklist filter, from the Lakebase product lookup."""
+    def run() -> list[str]:
+        return [r["brand"] for r in _pg_rows(
+            "SELECT DISTINCT brand FROM public.product_lookup WHERE brand IS NOT NULL ORDER BY 1")]
+    return _cached("brands", 3600, run)
+
+
+def kpi_strip(scope: str | None) -> dict[str, Any]:
+    """Header KPIs from Lakebase: fill rate, OTIF, chargebacks (latest PO week vs the one before)
+    and units / revenue at risk now. Ratios are ratios of sums, never averages of percentages.
+    """
+    weeks = _pg_rows(
+        """SELECT week_end_date, SUM(requested_units)::float AS req, SUM(shipped_units)::float AS shp,
+                  SUM(po_lines)::float AS po, SUM(otif_lines)::float AS otif,
+                  SUM(chargeback_usd)::float AS cb
+           FROM public.fill_rate_summary
+           WHERE (%(scope)s::text IS NULL OR retailer_code = %(scope)s::text)
+           GROUP BY week_end_date ORDER BY week_end_date DESC LIMIT 2""", {"scope": scope})
+    tot = risk_totals(scope)
+
+    def at(i: int) -> dict[str, Any] | None:
+        if i >= len(weeks):
+            return None
+        x = weeks[i]
+        return {"week": x["week_end_date"], "fill": 100 * x["shp"] / x["req"] if x["req"] else None,
+                "otif": 100 * x["otif"] / x["po"] if x["po"] else None, "chargeback": x["cb"]}
+    return {"now": at(0), "prior": at(1), "units_at_risk": float(tot["units_at_risk"]),
+            "revenue_at_risk": float(tot["revenue_at_risk"]), "critical": int(tot["critical_rows"])}
+
+
+def wape_wow(scope: str | None) -> dict[str, Any]:
+    """Latest holdout week's WAPE against the week before (warehouse, cached 15 minutes)."""
+    def run() -> dict[str, Any]:
+        flt = "WHERE retailer_code = :r" if scope else ""
+        _, rows = _wh(
+            f"SELECT week_end_date, 100 * SUM(abs_error) / NULLIF(SUM(actual_units), 0) "
+            f"FROM {S.CATALOG}.gold.fct_demand_forecast_eval {flt} "
+            f"GROUP BY week_end_date ORDER BY week_end_date DESC LIMIT 2", {"r": scope} if scope else None)
+        vals = [float(r[1]) for r in rows if r[1] is not None]
+        return {"now": vals[0] if vals else None, "prior": vals[1] if len(vals) > 1 else None}
+    return _cached(f"wape_wow:{scope}", 900, run)
+
+
+def sku_history(sku: str, retailer: str, weeks: int = 26) -> dict[str, Any]:
+    """Actual weekly units for one series, plus its holdout-backtest WAPE (warehouse, cached)."""
+    def run() -> dict[str, Any]:
+        g = f"{S.CATALOG}.gold"
+        p = {"s": clean_id(sku), "r": clean_id(retailer)}
+        _, act = _wh(
+            f"SELECT week_end_date, SUM(pos_units), SUM(true_demand_units) FROM {g}.fct_demand_weekly "
+            f"WHERE sku_id = :s AND retailer_code = :r GROUP BY week_end_date "
+            f"ORDER BY week_end_date DESC LIMIT {int(weeks)}", p)
+        _, bt = _wh(
+            f"SELECT 100 * SUM(abs_error) / NULLIF(SUM(actual_units), 0), COUNT(*) "
+            f"FROM {g}.fct_demand_forecast_eval WHERE sku_id = :s AND retailer_code = :r", p)
+        act.reverse()
+        return {"weeks": [str(r[0]) for r in act], "pos": [float(r[1]) for r in act],
+                "demand": [float(r[2]) for r in act],
+                "backtest_wape": float(bt[0][0]) if bt and bt[0][0] is not None else None,
+                "backtest_rows": int(bt[0][1]) if bt else 0}
+    return _cached(f"hist:{sku}:{retailer}", 900, run)
+
+
+def sku_inbound(sku: str, after: str, limit: int = 8) -> list[dict[str, Any]]:
+    """Open inbound shipments for the SKU (revised ETA after the forecast origin), soonest first."""
+    def run() -> list[dict[str, Any]]:
+        cols, rows = _wh(
+            f"SELECT asn_id, dc_code, shipped_units, original_eta_date, revised_eta_date, eta_slip_days, "
+            f"transport_mode FROM {S.CATALOG}.gold.fct_inbound_eta "
+            f"WHERE sku_id = :s AND revised_eta_date > CAST(:a AS DATE) "
+            f"ORDER BY revised_eta_date, asn_id LIMIT {int(limit)}", {"s": clean_id(sku), "a": after})
+        return [dict(zip(cols, r, strict=True)) for r in rows]
+    return _cached(f"inb:{sku}:{after}", 900, run)
 
 
 def baseline() -> dict[str, dict[str, Any]]:

@@ -1,17 +1,27 @@
 # Evidence 05 — Stage D: Lakebase operational serving and write-back
 
-> **Update 2026-10-15 — trimmed from four synced tables to two.** The app reads
-> only the at-risk worklist and the forecast, so `stockout_risk_current` and
-> `forecast_next_13w` were kept and `product_lookup` / `fill_rate_summary` were
-> removed, together with the `gold.svc_product_lookup` / `gold.svc_fill_rate_summary`
-> projections that existed only to feed them. Both kept tables were re-synced after
-> the forecaster rebuild and match Unity Catalog exactly (`stockout_risk_current`
-> 3,016 = 3,016, `forecast_next_13w` 58,474 = 58,474; 25 decisions in Lakebase =
-> 25 in `gold.fct_allocation_decisions`). The governance finding below — Unity
-> Catalog refusing an online copy of a table with a row filter or column mask — is
-> unchanged and is the reason the two dropped tables needed projections at all. The
-> sections below are the record of the original four-table run and are kept as it
-> happened.
+> **Update 2026-10-15 (second) — back to four synced tables, now with a reader for each.**
+> An earlier update this day trimmed the set to two (`stockout_risk_current`,
+> `forecast_next_13w`) because the app read nothing else. The build prompt names four,
+> and the app now genuinely reads all of them, so the two removed tables and their
+> projections were restored (`src/lakebase/serving_tables.py`, then
+> `sync.py --only product_lookup,fill_rate_summary`):
+>
+> | Postgres table | Read by the app for | Rows (UC = Lakebase) |
+> |---|---|---|
+> | `stockout_risk_current` | worklist, executive aggregates, units / revenue at risk | 3,016 |
+> | `forecast_next_13w` | 13-week forecast, decision write | 58,474 |
+> | `product_lookup` | product names, categories and brand filter (artwork, captions) | 2,400 |
+> | `fill_rate_summary` | header KPIs: fill rate, OTIF, chargebacks, week-over-week deltas | 231 |
+>
+> The two restored tables are served from `gold.svc_product_lookup` (no cost or margin
+> column; asserted) and `gold.svc_fill_rate_summary`, because Unity Catalog refuses an
+> online copy of a table with a row filter or column mask. Source tables, pipeline ids and
+> parity are regenerated in `evidence/02b_lineage.md` §5. The sections below are the
+> record of the original four-table run and are kept as it happened.
+>
+> The decision count in Lakebase can exceed `gold.fct_allocation_decisions` between
+> write-back runs (see `evidence/02b_lineage.md` §6).
 
 
 | | |

@@ -140,9 +140,9 @@ def exec_tab() -> html.Div:
                 html.Div([
                     html.Div([html.Button(q, id={"type": "qchip", "i": i}, n_clicks=0, className="qchip")
                               for i, q in enumerate(EXEC_QUESTIONS)]),
+                    html.Label("Or type your own question", htmlFor="genie-q", className="small-note"),
                     dbc.InputGroup([
-                        dbc.Input(id="genie-q", type="text", size="sm", n_submit=0,
-                                  placeholder="Or type your own question"),
+                        dbc.Input(id="genie-q", type="text", size="sm", n_submit=0),
                         dbc.Button("Ask", id="genie-btn", color="primary", size="sm"),
                     ]),
                     dcc.Loading(html.Div(id="genie-out", className="mt-3"), type="circle"),
@@ -214,11 +214,13 @@ def decide_tab() -> html.Div:
         dbc.Row([
             dbc.Col(dbc.Checklist(id="tiers", inline=True, value=["CRITICAL", "HIGH"],
                                   options=[{"label": f"{GLYPH[t]} {t}", "value": t} for t in S.TIERS],
-                                  style={"fontSize": "13px"}), md=8),
+                                  style={"fontSize": "13px"}), md=12, lg=5),
             dbc.Col(dcc.Dropdown(id="fam", value="ALL", clearable=False, options=[
                 {"label": "All licence families", "value": "ALL"},
                 *[{"label": f.replace("_", " ").title(), "value": f}
-                  for f in ("EVERGREEN", "FILM_TIE_IN", "SOCIAL_TREND")]]), md=4),
+                  for f in ("EVERGREEN", "FILM_TIE_IN", "SOCIAL_TREND")]]), md=6, lg=4),
+            dbc.Col(dcc.Dropdown(id="brand", value="ALL", clearable=False,
+                                 options=[{"label": "All brands", "value": "ALL"}]), md=6, lg=3),
         ], className="mb-2 g-2"),
         dcc.Loading(dash_table.DataTable(
             id="worklist", columns=WORKLIST_COLS, data=[], row_selectable="single", selected_rows=[0],
@@ -284,18 +286,23 @@ def decide_tab() -> html.Div:
             dbc.Row([
                 dbc.Col([html.Label("Units to ship (for Override)", className="small-note"),
                          dbc.Input(id="dec-units", type="number", min=0, step=1, size="sm")], width=5),
-                dbc.Col([html.Label("Reason (required for Override)", className="small-note"),
-                         dbc.Input(id="dec-why", type="text", size="sm",
-                                   placeholder="e.g. protect the line review")], width=7),
+                dbc.Col([html.Label("Reason (required for Override), e.g. protect the line review",
+                                    className="small-note"),
+                         dbc.Input(id="dec-why", type="text", size="sm")], width=7),
             ], className="mb-2"),
             dbc.Button("Record decision", id="dec-save", color="success", size="sm", disabled=True),
             html.Div(id="dec-out", className="mt-2"), html.Div(id="dec-history", className="mt-2")]))
 
     forecast_card = ui.section(
-        "13-week forecast for this position",
-        "Expected (p50) and high-case (p90) demand per week; the dotted line is the projected stockout.",
+        "Demand history and 13-week forecast",
+        "Actual weekly demand, then expected (p50) and high-case (p90) forecast; the dotted line is the "
+        "projected stockout.",
         html.Div([dcc.Graph(id="forecast-graph", config={"displayModeBar": False}),
                   html.Div(id="forecast-note", className="small-note")]))
+    inbound_card = ui.section(
+        "Inbound shipments",
+        "Open purchase orders for this SKU: when they land, and how late they have slipped.",
+        dcc.Loading(html.Div(id="inbound-out"), type="circle"))
     realtime_card = ui.section(
         "Real-time check",
         "Re-forecast this position live and compare it with the batch forecast. Same model, two serving paths.",
@@ -313,14 +320,50 @@ def decide_tab() -> html.Div:
     return html.Div([
         how_to, selected,
         dbc.Row([dbc.Col(agent_card, lg=7), dbc.Col(decide_card, lg=5)]),
-        dbc.Row([dbc.Col([worklist_card, log_card], lg=7), dbc.Col([forecast_card, realtime_card], lg=5)]),
+        dbc.Row([dbc.Col([worklist_card, log_card], lg=7), dbc.Col([forecast_card, inbound_card, realtime_card], lg=5)]),
     ])
+
+
+def kpi_strip_children(scope: str | None) -> Any:
+    """Header KPIs. Fill rate, OTIF, chargebacks and risk come from Lakebase; WAPE from the cached
+    metric view. Deltas compare the latest purchase-order week with the one before it."""
+    try:
+        k = b.kpi_strip(scope)
+    except Exception as e:  # noqa: BLE001
+        return alert(f"Header KPIs unavailable (Lakebase): {str(e)[:160]}", "warning")
+    try:
+        wp = b.wape_wow(scope)
+    except Exception:  # noqa: BLE001
+        wp = {"now": None, "prior": None}
+    now, prior = k["now"] or {}, k["prior"] or {}
+    wk = now.get("week")
+    cards = [
+        ui.kpi_card("Fill rate", pct(now.get("fill"), 2), ui.delta_chip(now.get("fill"), prior.get("fill"), True),
+                    foot=f"PO week ending {wk}" if wk else None),
+        ui.kpi_card("OTIF", pct(now.get("otif"), 2), ui.delta_chip(now.get("otif"), prior.get("otif"), True)),
+        ui.kpi_card("Forecast WAPE", pct(wp["now"]), ui.delta_chip(wp["now"], wp["prior"], False),
+                    foot="latest held-out week"),
+        ui.kpi_card("Units at risk", num(k["units_at_risk"]),
+                    f"{num(k['critical'])} critical positions", foot="now; no prior snapshot is kept"),
+        ui.kpi_card("Revenue at risk", money(k["revenue_at_risk"]), "wholesale value of the shortfall"),
+        ui.kpi_card("Chargebacks", money(now.get("chargeback") or 0),
+                    ui.delta_chip((now.get("chargeback") or 0) / 1000 if now else None,
+                                  (prior.get("chargeback") or 0) / 1000 if prior else None, False, "$k", 1)),
+    ]
+    return dbc.Row([dbc.Col(c, xs=6, md=4, xl=2) for c in cards], className="g-2")
+
+
+@app.callback(Output("kpi-strip", "children"), Input("scope", "value"), Input("refresh", "n_clicks"))
+def render_kpi_strip(scope: str, _n: int):
+    return kpi_strip_children(_scope(scope))
 
 
 app.layout = html.Div([
     dcc.Store(id="sel"), dcc.Store(id="agent-store"), dcc.Store(id="saved", data=0), dcc.Store(id="resize-nudge"),
     dcc.Interval(id="tick", interval=60_000),
     header(),
+    dbc.Container(dcc.Loading(html.Div(id="kpi-strip"), type="dot", color="#2a78d6"),
+                  fluid=True, className="kpi-strip-wrap"),
     dbc.Container([
         dbc.Tabs([
             dbc.Tab(exec_tab(), label="Executive summary", tab_id="tab-exec"),
@@ -582,20 +625,26 @@ def render_perf(tab: str, scope: str, _saved: int):
 
     def bv(key: str, fmt: str = "money") -> str:
         v = float(bl[key]["value"]) if key in bl else None
-        return "—" if v is None else (money(v) if fmt == "money" else f"{v:,.2f}")
+        if v is None:
+            return "—"
+        return money(v) if fmt == "money" else (f"{v:,.0f}" if fmt == "n" else f"{v:,.2f}")
 
     def bp(key: str) -> str:
         return pct(float(bl[key]["value"])) if key in bl else "—"
 
     base = dbc.Row([
+        dbc.Col(ui.kpi_card("Stockout-weeks", bv("stockout_weeks", "n"),
+                            f"{bp('stockout_week_incidence_pct')} of SKU-DC-weeks"), md=6, xl=2),
         dbc.Col(ui.kpi_card("Sales lost to stockouts", bv("lost_revenue_usd"),
-                            f"{bp('lost_units_pct_of_demand')} of demand"), md=6, xl=3),
+                            f"{bp('lost_units_pct_of_demand')} of demand"), md=6, xl=2),
+        dbc.Col(ui.kpi_card("Compliance chargebacks", bv("compliance_chargeback_usd"),
+                            f"{bp('compliance_chargeback_pct_of_invoiced')} of invoiced"), md=6, xl=2),
         dbc.Col(ui.kpi_card("Markdown loss on excess", bv("markdown_loss_usd"),
-                            f"{bp('markdown_loss_pct_of_invoiced')} of invoiced"), md=6, xl=3),
+                            f"{bp('markdown_loss_pct_of_invoiced')} of invoiced"), md=6, xl=2),
         dbc.Col(ui.kpi_card("Air-freight expedites", bv("air_freight_usd"),
-                            f"{bv('air_vs_ocean_freight_premium_x', 'x')}× the ocean rate per unit"), md=6, xl=3),
+                            f"{bv('air_vs_ocean_freight_premium_x', 'x')}× the ocean rate per unit"), md=6, xl=2),
         dbc.Col(ui.kpi_card("Inventory turns", bv("inventory_turns_annual", "x"),
-                            f"{bv('weeks_of_supply', 'x')} weeks of supply"), md=6, xl=3),
+                            f"{bv('weeks_of_supply', 'x')} weeks of supply"), md=6, xl=2),
     ], className="g-3")
     return cards, trend, accts, fam_fig, tier_fig, ui.dc_map(dc), dc_tbl, base
 
@@ -606,10 +655,12 @@ def render_perf(tab: str, scope: str, _saved: int):
 
 @app.callback(
     Output("worklist", "data"), Output("worklist", "selected_rows"), Output("worklist-note", "children"),
-    Input("scope", "value"), Input("tiers", "value"), Input("fam", "value"), Input("saved", "data"),
+    Input("scope", "value"), Input("tiers", "value"), Input("fam", "value"), Input("brand", "value"),
+    Input("saved", "data"),
 )
-def render_worklist(scope: str, tiers: list[str], fam: str, _saved: int):
-    rows = b.worklist(_scope(scope), tiers or [], family=None if fam == "ALL" else fam)
+def render_worklist(scope: str, tiers: list[str], fam: str, brand: str, _saved: int):
+    rows = b.worklist(_scope(scope), tiers or [], family=None if fam == "ALL" else fam,
+                      brand=None if brand in (None, "ALL") else brand)
     data = [{**r, "tier_label": f"{GLYPH[r['risk_tier']]} {r['risk_tier']}",
              "projected_stockout_week": str(r["projected_stockout_week"]),
              "decision": r["last_action"] or "—"} for r in rows]
@@ -618,10 +669,20 @@ def render_worklist(scope: str, tiers: list[str], fam: str, _saved: int):
     return data, keep, note
 
 
+@app.callback(Output("brand", "options"), Input("tick", "n_intervals"))
+def brand_options(_n: int):
+    try:
+        return [{"label": "All brands", "value": "ALL"}, *[{"label": x, "value": x} for x in b.brands()]]
+    except Exception:  # noqa: BLE001
+        raise PreventUpdate from None
+
+
 @app.callback(Output("export-dl", "data"), Input("export-btn", "n_clicks"), State("scope", "value"),
-              State("tiers", "value"), State("fam", "value"), prevent_initial_call=True)
-def export_csv(_n: int, scope: str, tiers: list[str], fam: str):
-    rows = b.worklist(_scope(scope), tiers or [], limit=5000, family=None if fam == "ALL" else fam)
+              State("tiers", "value"), State("fam", "value"), State("brand", "value"),
+              prevent_initial_call=True)
+def export_csv(_n: int, scope: str, tiers: list[str], fam: str, brand: str):
+    rows = b.worklist(_scope(scope), tiers or [], limit=5000, family=None if fam == "ALL" else fam,
+                      brand=None if brand in (None, "ALL") else brand)
     buf = io.StringIO()
     cols = ["sku_id", "retailer_code", "brand", "license_family", "lifecycle_stage", "risk_tier",
             "severity_score", "projected_stockout_week", "weeks_to_stockout", "units_at_risk",
@@ -640,17 +701,39 @@ def select_row(selected: list[int], data: list[dict]):
     return {"sku": r["sku_id"], "retailer": r["retailer_code"]}
 
 
+def inbound_panel(sku: str, origin: str | None) -> Any:
+    """Open inbound shipments for the SKU: ETA, original promise and slip."""
+    if not origin:
+        return html.Div("No forecast origin, so open shipments cannot be listed.", className="small-note")
+    try:
+        rows = b.sku_inbound(sku, origin)
+    except Exception as e:  # noqa: BLE001
+        return alert(f"Inbound shipments unavailable: {str(e)[:160]}", "warning")
+    if not rows:
+        return html.Div("No open inbound shipments for this SKU: the shortfall is not covered by anything "
+                        "on the water.", className="small-note")
+    return dbc.Table([
+        html.Thead(html.Tr([html.Th(c) for c in ("DC", "Units", "Arrives", "Promised", "Slip")])),
+        html.Tbody([html.Tr([
+            html.Td(r["dc_code"].replace("DC_", "").title()), html.Td(num(r["shipped_units"])),
+            html.Td(r["revised_eta_date"]), html.Td(r["original_eta_date"]),
+            html.Td(chip("warn", f"{r['eta_slip_days']} d late") if int(r["eta_slip_days"] or 0) > 0
+                    else chip("ok", "on time"))]) for r in rows])],
+        size="sm", className="mb-0", style={"fontSize": "12.5px"})
+
+
 @app.callback(
     Output("detail-head", "children"), Output("forecast-graph", "figure"), Output("forecast-note", "children"),
-    Output("dec-history", "children"), Input("sel", "data"), Input("saved", "data"),
+    Output("dec-history", "children"), Output("inbound-out", "children"),
+    Input("sel", "data"), Input("saved", "data"),
 )
 def render_detail(sel: dict | None, _saved: int):
     if not sel:
-        return html.Div("Select a position from the worklist."), ui.empty_fig("No selection", 300), "", ""
+        return html.Div("Select a position from the worklist."), ui.empty_fig("No selection", 300), "", "", ""
     sku, ret = sel["sku"], sel["retailer"]
     risk, fc, hist = b.sku_risk(sku, ret), b.sku_forecast(sku, ret), b.sku_decisions(sku, ret)
     if not risk:
-        return alert(f"{sku} at {ret} is no longer at risk."), ui.empty_fig("", 300), "", ""
+        return alert(f"{sku} at {ret} is no longer at risk."), ui.empty_fig("", 300), "", "", ""
     card = sku_card_info(risk)
     head = html.Div([
         sku_image(card),
@@ -668,13 +751,23 @@ def render_detail(sel: dict | None, _saved: int):
                       html.Span("  ·  Inbound ", className="fact"), html.B(num(risk["sku_inbound_horizon_units"]))]),
         ]),
     ], className="sku-head")
+    try:
+        hist_actual: dict[str, Any] | None = b.sku_history(sku, ret)
+    except Exception:  # noqa: BLE001
+        hist_actual = None
     note = (f"Batch forecast: {fc[0]['algorithm']} · ml.demand_forecaster v{fc[0]['model_version']} "
             f"@champion · scored with fe.score_batch." if fc else "No forecast rows.")
+    if hist_actual and hist_actual.get("backtest_wape") is not None:
+        note += (f" Backtest on this series: WAPE {hist_actual['backtest_wape']:.0f}% over "
+                 f"{hist_actual['backtest_rows']} held-out weeks.")
+    elif hist_actual is None:
+        note += " Demand history is unavailable (warehouse not reachable)."
     rows = [html.Div(f"{h['decided_at']:%d %b %H:%M} · {h['action']} · {h['planner_units']} units "
                      f"(recommended {h['recommended_units']}) · {h['planner_id']}", className="meta") for h in hist]
     history = html.Div([html.Div("Earlier decisions on this series", className="small-note"), *rows]) if rows else ""
-    fig = ui.forecast_fig(fc, risk["projected_stockout_week"]) if fc else ui.empty_fig("No forecast", 300)
-    return head, fig, note, history
+    fig = (ui.forecast_fig(fc, risk["projected_stockout_week"], hist_actual) if fc
+           else ui.empty_fig("No forecast", 300))
+    return head, fig, note, history, inbound_panel(sku, str(fc[0]["origin_week"]) if fc else None)
 
 
 @app.callback(
@@ -727,7 +820,7 @@ def agent(sel: dict | None, _n: int, question: str | None):
     out.append(dcc.Markdown(r["answer"] or "(no answer)", className="answer scroll"))
     out.append(html.Div([html.Span("Tools used: ", className="small-note"),
                          *[html.Span(t, className="chip") for t in r["tools"]]], className="mt-2"))
-    out.append(html.Div(f"request id {r['request_id']} · {r['llm_endpoint']} · "
+    out.append(html.Div(f"trace id (serving request) {r['request_id']} · {r['llm_endpoint']} · "
                         f"{num(r['input_tokens'])} in / {num(r['output_tokens'])} out tokens · "
                         f"{r['latency_ms'] / 1000:.1f}s", className="meta mono mt-1"))
     if r.get("log_error"):

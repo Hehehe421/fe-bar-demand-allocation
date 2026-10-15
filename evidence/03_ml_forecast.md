@@ -32,10 +32,14 @@ feature_rows  skus  retailers  origin_weeks  first_week  last_week
 (1 row)
 ```
 
-The training set is assembled through a `FeatureLookup` keyed on
-(`sku_id`, `retailer_code`) with `origin_week` as the timestamp lookup key, so
-the point-in-time join is declared once and reused at inference instead of
-being reimplemented in a scoring script. `retailer_code` is deliberately a
+The training set is assembled through a `FeatureLookup` on the exact key
+(`sku_id`, `retailer_code`, `origin_week`), declared once and reused at inference
+instead of being reimplemented in a scoring script. **This is an exact-key lookup,
+not an as-of (point-in-time) join:** the feature table deliberately has no
+timeseries column. The leakage guard is the frame instead (features are computed
+at the origin week, the label is taken from origin + h, and the holdout is a
+single origin). A timeseries `FeatureLookup`, which the build prompt describes in
+Stage C1, is not implemented; `docs/RUBRIC_AUDIT.md` (G7) records that. `retailer_code` is deliberately a
 primary key of the feature table rather than a feature column — including it
 as both makes `create_table` fail with `COLUMN_ALREADY_EXISTS`.
 

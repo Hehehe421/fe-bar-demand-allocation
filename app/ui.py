@@ -60,6 +60,20 @@ def kpi_card(label: str, value: str, sub: Any = None, status: tuple[str, str] | 
     ], className="k-card")
 
 
+def delta_chip(now: float | None, prior: float | None, higher_is_better: bool, unit: str = "pt",
+               d: int = 1, label: str = "vs prior week") -> html.Span:
+    """Change against the prior period: an arrow, the signed amount, and good / bad in words."""
+    if now is None or prior is None:
+        return html.Span("no prior week", className="delta d-none-prior")
+    diff = now - prior
+    if abs(diff) < 0.5 * 10 ** -d:
+        return html.Span(f"▬ flat {label}", className="delta d-flat")
+    good = (diff > 0) == higher_is_better
+    arrow = "▲" if diff > 0 else "▼"
+    return html.Span(f"{arrow} {diff:+.{d}f} {unit} {label} ({'better' if good else 'worse'})",
+                     className=f"delta {'d-good' if good else 'd-bad'}")
+
+
 def section(title: str, hint: Any = None, body: Any = None, class_name: str = "") -> html.Div:
     return html.Div([html.H2(title), html.Div(hint, className="hint") if hint else None, body],
                     className=f"card-s {class_name}")
@@ -170,9 +184,17 @@ def dc_map(dcs: list[dict[str, Any]]) -> go.Figure:
     return _style(fig, 400, dict(l=0, r=0, t=0, b=0))
 
 
-def forecast_fig(fc: list[dict[str, Any]], stockout_week: Any) -> go.Figure:
+def forecast_fig(fc: list[dict[str, Any]], stockout_week: Any,
+                 history: dict[str, Any] | None = None) -> go.Figure:
+    """13-week forecast; with ``history`` the recent actual weekly demand is drawn before it."""
     x = [str(r["week_end_date"]) for r in fc]
     fig = go.Figure()
+    if history and history.get("weeks"):
+        fig.add_trace(go.Scatter(
+            x=history["weeks"], y=history["demand"], name="Actual demand", mode="lines",
+            line=dict(color=INK2, width=2), hovertemplate="Actual %{y:,.0f} units<extra></extra>"))
+        fig.add_annotation(x=history["weeks"][-1], y=history["demand"][-1], text="Actual", showarrow=False,
+                           xanchor="right", yshift=14, font=dict(color=INK2, size=12))
     for name, key, color in (("p90 (high case)", "forecast_p90", SERIES2),
                              ("p50 (expected)", "forecast_p50", SERIES1)):
         fig.add_trace(go.Scatter(

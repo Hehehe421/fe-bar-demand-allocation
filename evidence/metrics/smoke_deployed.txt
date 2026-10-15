@@ -1,0 +1,19 @@
+2026-10-15 16:17:59,114 [acc] loading vm-summer-classic profile from ~/.databrickscfg: host, serverless_compute_id, auth_type, account_id, workspace_id
+2026-10-15 16:18:00,143 [acc] Using Databricks CLI authentication
+app https://allocation-command-center-7474649643770783.aws.databricksapps.com
+profile vm-summer-classic
+
+PASS  HTTP 200     0.4s  GET /healthz                     0-byte body (answered by the platform proxy)
+PASS  HTTP 200     0.4s  GET / (dash page)                5,832 bytes
+PASS  HTTP 200     0.9s  header KPIs (Lakebase)           Fill rate | 95.75% | ▲ +0.8 pt vs prior week (better) | PO week ending 2026-09-19 | OTIF | 84.10% | ▼ -0.2 pt vs prior week (worse) | Forecast WAPE | 
+PASS  HTTP 200     0.6s  worklist, brand filter           250 rows, all Snugglewick
+PASS  HTTP 200     2.3s  SKU detail: actuals, ETAs        series ['Actual demand', 'p90 (high case)', 'p50 (expected)']; inbound: DC | Units | Arrives | Promised | Slip | Central | 5 | 2026-11-07 | 20
+      pre : allocation_decisions=26 (max id 33), agent_interactions=1
+PASS  HTTP 200    18.7s  Genie question (chip)            You asked:  | What is the revenue at risk by risk tier? | Revenue at risk is highest in **MEDIUM** at **$556,576.44**, followed by **CRITICA
+PASS  HTTP 200    25.9s  agent call (serving endpoint)    recommends 2796 units; request id 59c470ea-21fb-41c3-8f1a-b8165926322e
+      post: allocation_decisions=27 (max id 39)
+PASS  HTTP 200     0.6s  decide -> Lakebase INSERT        Decision #39 recorded |  — accept, 2,796 units (+0 vs recomm; rows 26 -> 27; trace id carried: True
+      cleanup: deleted decision #39 and its interaction; decisions=26, interactions=1
+PASS  cleanup restored the pre-test counts
+
+9/9 passed

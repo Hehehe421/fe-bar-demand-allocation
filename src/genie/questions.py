@@ -8,6 +8,9 @@ is judged by data and not by eye.
 ``check`` names how the two results are compared:
   * ``rows``    -- the result sets must match exactly (after rounding)
   * ``scalar``  -- first value of the first row must match within 1%
+  * ``values``  -- every numeric value in the reference result must appear among Genie's
+                   numeric cells (row count and label formats may differ)
+  * ``top1``    -- Genie's FIRST row must contain every cell of the reference's first row
   * ``refusal`` -- Genie must NOT return a number; it should say the data is not
                    available (used for the masked-column governance question)
 """
@@ -149,4 +152,99 @@ QUESTIONS: Final[tuple[Q, ...]] = (
         f"SELECT risk_tier, ROUND(SUM(revenue_at_risk_usd), 0) AS revenue_at_risk "
         f"FROM {G}.fct_stockout_risk GROUP BY risk_tier ORDER BY risk_tier",
         why="added for the executive tab's suggested questions",
-    ),)
+    ),
+
+    # ---- rev3: the four questions the build prompt names, plus the KPIs it requires ----------
+    Q(
+        "q15_stockout_mass_a_4w",
+        "Which SKUs are projected to stock out at MASS_A in the next 4 weeks?",
+        f"SELECT DISTINCT sku_id FROM {G}.fct_stockout_risk "
+        f"WHERE retailer_code = 'MASS_A' AND weeks_to_stockout <= 4 ORDER BY sku_id",
+        why="rubric question 1: a filtered list, one row per SKU",
+    ),
+    Q(
+        "q16_fill_qoq",
+        "What's our fill rate by retailer last quarter vs. the same quarter last year?",
+        f"SELECT Retailer, `Quarter`, ROUND(MEASURE(`Fill Rate Pct`), 2) AS fill_rate_pct "
+        f"FROM {G}.mv_fill_rate "
+        f"WHERE `Quarter` IN (TIMESTAMP '2026-07-01', TIMESTAMP '2025-07-01') GROUP BY ALL",
+        check="values",
+        why="rubric question 2: two quarters x three retailers from the governed metric view; "
+        "'last quarter' = Q3 2026 as of 2026-10-15",
+    ),
+    Q(
+        "q17_worst_wape_family",
+        "Which license family has the worst forecast accuracy?",
+        f"SELECT `License Family` AS license_family, ROUND(MEASURE(`WAPE Pct`), 1) AS wape_pct "
+        f"FROM {G}.mv_forecast_accuracy GROUP BY ALL ORDER BY wape_pct DESC LIMIT 1",
+        check="top1",
+        why="rubric question 3: 'worst' accuracy is the HIGHEST WAPE, a direction trap",
+    ),
+    Q(
+        "q18_overrides_last_week",
+        "Show me the allocation overrides planners made last week and the agent's original "
+        "recommendation.",
+        f"SELECT recommended_units, planner_units FROM {G}.fct_allocation_decisions "
+        f"WHERE action = 'override' "
+        f"AND decided_at >= date_trunc('week', current_date()) - INTERVAL 7 DAYS "
+        f"AND decided_at < date_trunc('week', current_date())",
+        check="values",
+        why="rubric question 4: the decision-capture loop; 'original recommendation' = "
+        "recommended_units. "
+        "The window is relative to today, so this reference moves with the calendar",
+    ),
+    Q(
+        "q19_wos_dc",
+        "What are weeks of supply by distribution centre?",
+        f"SELECT `DC`, ROUND(MEASURE(`Weeks Of Supply`), 2) AS wos "
+        f"FROM {G}.mv_weeks_of_supply GROUP BY `DC`",
+        check="values",
+        why="a required KPI; a ratio of sums, so averaging per-SKU values is wrong",
+    ),
+    Q(
+        "q20_chargebacks",
+        "How much compliance chargeback did each retailer incur?",
+        f"SELECT Retailer, ROUND(MEASURE(`Chargeback USD`), 0) AS chargeback_usd "
+        f"FROM {G}.mv_fill_rate GROUP BY ALL",
+        check="values",
+        why="a required KPI (compliance chargeback $)",
+    ),
+    Q(
+        "q21_stockout_weeks",
+        "How many stockout weeks did MASS_B have in 2026?",
+        f"SELECT COUNT(*) AS n FROM {G}.fct_demand_weekly WHERE retailer_code = 'MASS_B' "
+        f"AND is_stockout_week AND year(week_end_date) = 2026",
+        check="scalar",
+        why="a required KPI; counts SKU x DC x week cells where demand exceeded service",
+    ),
+    Q(
+        "q22_inbound_slip",
+        "How many inbound shipments are more than 14 days later than first promised?",
+        f"SELECT COUNT(*) AS n FROM {G}.fct_inbound_eta WHERE eta_slip_days > 14",
+        check="scalar",
+        why="inbound ETA table; slip = revised minus original",
+    ),
+    Q(
+        "q23_brand_critical",
+        "Which brand has the most critical positions?",
+        f"SELECT brand, COUNT(*) AS n FROM {G}.fct_stockout_risk WHERE risk_tier = 'CRITICAL' "
+        f"GROUP BY brand ORDER BY n DESC LIMIT 1",
+        check="top1",
+        why="entity matching on brand; top-1 of a count",
+    ),
+    Q(
+        "q24_forecast_etail",
+        "What is the total 13-week p90 forecast demand for ETAIL_C?",
+        f"SELECT ROUND(SUM(forecast_p90), 0) AS p90_units FROM {G}.fct_demand_forecast "
+        f"WHERE retailer_code = 'ETAIL_C'",
+        check="scalar",
+        why="portfolio demand must come from fct_demand_forecast, not the at-risk-only table",
+    ),
+    Q(
+        "q25_unit_cost",
+        "What is the unit cost of SKU-00042?",
+        f"SELECT unit_cost_usd FROM {G}.dim_product WHERE sku_id = 'SKU-00042'",
+        check="refusal",
+        why="governance: cost is masked for everyone except finance",
+    ),
+)

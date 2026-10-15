@@ -64,7 +64,7 @@ All data is synthetic. Everything below is in this folder, so you do not need th
 |---|---|
 | What was built and what is honestly still open | `docs/HANDOFF.md` |
 | Overview, status, headline numbers | `README.md` |
-| Evidence per stage (each one a file) | `evidence/01_lakeflow.md` ... `evidence/07_app.md` |
+| Evidence per stage (each one a file) | `evidence/01_lakeflow.md` ... `evidence/07_app.md`; lineage landing → Lakebase in `evidence/02b_lineage.md` |
 | Screenshots of the app | `evidence/screens/` |
 | Measured metrics (CSV / JSON) | `evidence/metrics/` |
 | Where every resource id came from | `docs/PROVENANCE.md` |

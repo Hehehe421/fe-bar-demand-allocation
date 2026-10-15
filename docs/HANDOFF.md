@@ -49,9 +49,9 @@ AutoML appears once, early, as *"and yes, you can do it this way too."* Shown, n
 | **C1 §C — sweep** | Built, 7 candidates / 6 families | `evidence/03_ml_forecast.md` |
 | **C1 §D — batch + real-time** | **Built and verified** | `evidence/03_ml_forecast.md`, notebook 03 §12–13 |
 | **C2 — GenAI agent** | Built; endpoint **now actually reads data** (it could not before — §6 #39–41) | `evidence/04_genai_agent.md` |
-| **D — Lakebase** | Built, trimmed to 2 synced tables | `evidence/05_lakebase.md` |
-| **E — Genie** | **Built**, 13/13, one intermittent error recorded | `evidence/06_genie.md` |
-| **F — App** | **Built and deployed**: 3 tabs (Executive · Performance & risk · Forecast & decide), 13/13 unit tests, 16/16 live smoke, decision flow verified on the deployed app | `evidence/07_app.md` |
+| **D — Lakebase** | Built: 4 synced tables, each read by the app; lineage to Lakebase in `evidence/02b_lineage.md` | `evidence/05_lakebase.md`, `evidence/02b_lineage.md` |
+| **E — Genie** | **Built to the §E spec (revision 3)**: business + KPI instructions, 8 examples, synonyms, 13 objects; 26 questions, 3 passes, all PASS; the q11 failure and fix kept | `evidence/06_genie.md` |
+| **F — App** | **Built and deployed**: Lakebase KPI header with week-over-week deltas, 3 tabs, brand filter, demand history + inbound ETAs, 14/14 unit tests, 16 backend checks, 9/9 deployed-app HTTP checks incl. a committed write with pre/post counts | `evidence/07_app.md` |
 | **Deck + docs** | **Not built — START HERE** | — |
 
 ### Headline measured numbers (all computed, none asserted)
@@ -73,8 +73,9 @@ AutoML appears once, early, as *"and yes, you can do it this way too."* Shown, n
   19/22 · 73.9% · 4/22 — the spread is part of the finding). A mechanical scorer
   catches what two LLM judges miss. **The live endpoint's tool calls are now verified
   to return data** (8/8 in a direct probe; a notebook cell fails the run otherwise).
-- Lakebase: 2 synced tables ONLINE matching UC row-for-row (3,016 and 58,474);
-  25 decisions round-tripped to UC; 0.051 ms server-side point lookup.
+- Lakebase: 4 synced tables ONLINE matching UC row-for-row (3,016 · 58,474 · 2,400 · 231);
+  25 decisions round-tripped to UC; 0.051 ms server-side point lookup. Lakebase holds one more
+  decision than UC (a hand-made test, id 33) until the write-back job next runs.
 - Real-time vs batch: SKU-01723 / MASS_A, horizon 1 → p50 **2,154.33**, p90
   **3,460.29** from the live endpoint, identical to `fe.score_batch`.
   Median ~179 ms from a laptop including network.
@@ -103,7 +104,7 @@ profile **`vm-summer-classic`**, workspace id `7474649643770783`.
 | Endpoint — agent | `toy-allocation-agent` | **READY**, v8 at 100%. Served entities for v4–v7 are still attached at 0% (`agents.deploy` accumulates them; scale-to-zero, so free). Removing them means re-submitting the endpoint config — not done, to avoid risking a working endpoint |
 | Lakebase project | `projects/toy-demand-alloc` | PG 17, Autoscaling |
 | Lakebase host | `ep-empty-butterfly-d2dihd0i.database.us-east-1.cloud.databricks.com` | |
-| UC online catalog | `toy_demand_alloc_online` | 2 synced tables: `stockout_risk_current`, `forecast_next_13w` |
+| UC online catalog | `toy_demand_alloc_online` | 4 synced tables: `stockout_risk_current`, `forecast_next_13w`, `product_lookup` (from `gold.svc_product_lookup`), `fill_rate_summary` (from `gold.svc_fill_rate_summary`) |
 | Genie space | `Demand & Allocation`, id `01f1c8cc66d713fba1decec949c0740c` | id also in `evidence/metrics/genie_space.json` |
 | App | `allocation-command-center` — https://allocation-command-center-7474649643770783.aws.databricksapps.com | service principal `73bbee7a-df47-4bb9-b503-30e5b392657f`; source `/Workspace/Users/sixuan.he@databricks.com/apps/allocation-command-center` |
 | Reviewable copy in the workspace | `/Workspace/Users/sixuan.he@databricks.com/fe-bar-demand-allocation/` | `START_HERE.md` is the index; notebooks (with outputs), docs, evidence, screenshots. Refresh with `python tools/publish_workspace.py` |
@@ -236,12 +237,16 @@ on top, then the worklist with filters and CSV export, forecast, real-time check
 
 ### 5a-bis. Rubric gaps — read `docs/RUBRIC_AUDIT.md` before the deck
 
-An audit against the FE Bar rubric (2026-10-15) found two **gate failures** (the customer name is
-in two pushed commits' history; three hits on the forbidden-word list), and five substantive gaps:
-Genie configured thinner than §E specifies, 2 of the 4 named synced tables, no `databricks.yml`,
-the app missing week-over-week deltas / brand filter / actuals / ETAs, and lineage evidence that
-stops at Gold. The point-in-time lookup was dropped by an earlier decision and the rubric asks for
-it. Each has an ID (G1–G14), a severity and an effort estimate there.
+Status after the 2026-10-15 work (details and IDs in the audit):
+
+- **Done:** Genie to the §E spec (G3); 4 synced tables with readers (G4); app KPI header from
+  Lakebase with week-over-week deltas, brand filter, demand history, inbound ETAs, trace id (G6);
+  lineage to Lakebase (G8); evidence 07 completeness (G6/G11); the input-hint hits (G2, app side).
+- **Open, needs a decision:** G1, the customer name is in two pushed, public commits' history.
+  A fresh repo is clean and safe; a history rewrite needs a force-push, which was not authorised.
+- **Open, not started:** `databricks.yml` + notebook `05_lakebase_serving` (G5); README outcome
+  table (G9); KPI vocabulary (G10: stockout-weeks is not shown in the app); point-in-time
+  `FeatureLookup` (G7, a **P1 stretch** in `SCOPE.md`, so optional; the evidence no longer claims it).
 
 ### 5b. Deck and docs — START HERE
 
@@ -324,7 +329,8 @@ endpoint that shipped for a week unable to read any data (§6 #39).
 21. Query a ResponsesAgent endpoint on the **raw `/invocations` route** with
     `{"input": [...]}`.
 22. **MLflow prompt registry is disabled org-wide.** `src/agent/prompt_store.py` is the
-    UC-backed substitute. Inside Model Serving it falls back to the source-file tier.
+    UC-backed substitute. The deployed endpoint loads the prompt from the UC registry by version
+    (checked live 2026-10-15); the source-file tier is only the last-resort fallback.
 
 **Unity Catalog**
 23. Gold objects are **materialized views** — `ALTER MATERIALIZED VIEW`, not `ALTER TABLE`.
@@ -423,6 +429,19 @@ endpoint that shipped for a week unable to read any data (§6 #39).
 55. **Look at every chart before shipping it.** A clipped label, a blank map and a false "OK" chip were
     all invisible in code and obvious in a screenshot.
 
+57. **Test the deployed app, not only the code.** Two bugs reached the deployed app that the local
+    checks missed: the SKU-detail query did not select `origin_week` (HTTP 500 in `render_detail`),
+    and the smoke test posted the Genie callback in the wrong shape (a pattern-matching `ALL` input
+    and two outputs). `tests/smoke_deployed.py` found both; `databricks apps logs` showed the
+    traceback.
+58. **Databricks Apps answers `/healthz` itself** (an empty 200), so an in-app `/healthz` route is
+    shadowed. Check the status code, not the body.
+59. **`fct_allocation_decisions` (UC) lags Lakebase** between write-back runs, and each insert
+    consumes a sequence value even when rolled back (ids skip). Genie reads UC; the app reads Lakebase.
+60. **A "pass" can be a coincidence of interpretation.** Genie read "last week" as the latest override
+    `week_end_date`; the reference used the calendar week of `decided_at`. Today they select the same
+    9 rows. The Genie reference queries that depend on today's date (q18) will drift.
+
 ## 7. Cost — check before and after
 
 Last measured 2026-10-13 from `system.billing.usage`: **this build is ~4%** of the
@@ -450,4 +469,4 @@ with the owner; do not act unilaterally.
 - **Reproduce a failure before changing config.** The forecaster endpoint failed three
   different ways in sequence; each fix exposed the next, and each retry cost a 25-minute
   queue. The local/venv validation in notebook 03 exists so the next one fails in seconds.
-- **Do not start a stage you cannot finish.** The repo has no stubs because of it.
+- **Do not start a stage you cannot finish.** Everything in the repo runs.

@@ -1,0 +1,22 @@
+PASS  warm-up: real-time forecaster          3.4s  forecaster answered in 0.2s
+PASS  lakebase: ranked worklist              0.8s  250 rows, top SKU-01723/MASS_A
+PASS  lakebase: account scoping              1.0s  997 rows
+PASS  lakebase: 13-week forecast             0.7s  13 weeks, model v13
+PASS  lakebase: totals                       0.7s  3,016 rows, $1,381,392 at risk
+PASS  warehouse: governed KPIs               2.9s  fill 96.26 otif 86.14 wape 67.4 p90 89.9 (trend 74.1)
+PASS  lakebase: KPI header + WoW             1.5s  fill 95.75% (+0.82 pt vs 2026-09-05), otif 84.10%, $1,381,392 / 150,252 units at risk
+PASS  lakebase: worklist brand filter        1.5s  3 brands; Glowberry Pets: 214 rows
+PASS  lakebase: product_lookup               1.5s  2,400 SKUs, masked columns present: none
+PASS  SKU detail: actuals + inbound ETAs     1.9s  14 weeks actuals, backtest WAPE 92%, 8 open inbound shipments
+PASS  executive aggregates                   0.8s  434 critical, $1,381,392 at risk, top SKU-01815
+PASS  performance trends                     3.3s  52 weeks, fill 95.8% otif 84.1%
+PASS  DC exposure conserves revenue          1.5s  4 DCs sum to $1,381,392 vs total $1,381,392
+PASS  catalog attributes for art             0.7s  Titan Squad Plushie 147
+PASS  service status                         1.1s  Lakebase=ok, Warehouse=ok, Agent=idle, Forecaster=ok
+PASS  business baseline snapshot             0.0s  26 baseline KPIs
+PASS  lakebase: decision write (rollback)     1.0s  insert ok (delta 2), rolled back, 26 rows remain
+PASS  real-time forecast == batch            1.4s  max |p50 diff| = 0.000 units over 13 weeks
+PASS  agent: tools return data              28.0s  tools ['get_stockout_risk', 'get_inbound_eta', 'get_fill_rate_history', 'get_fill_rate_history', 'get_fill_rate_history', 'recommend_allocation'], recommends 2796 units for MASS_A, request d733c138
+PASS  genie: answers with SQL               14.3s  [['SOCIAL_TREND', '579003.6400000001']] in 14.3s
+
+20/20 passed

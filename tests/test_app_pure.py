@@ -105,6 +105,25 @@ def test_art_follows_category_not_the_misleading_name():
     assert torso in figure and torso not in plush
 
 
+def test_delta_chip_direction_and_wording():
+    import ui
+
+    def txt(c):
+        return c.children
+
+    up_good = txt(ui.delta_chip(96.0, 95.0, True))
+    assert "▲" in up_good and "+1.0" in up_good and "better" in up_good
+    up_bad = txt(ui.delta_chip(78.0, 77.0, False))            # WAPE rising is worse
+    assert "▲" in up_bad and "worse" in up_bad
+    down_good = txt(ui.delta_chip(76.0, 77.0, False))
+    assert "▼" in down_good and "better" in down_good
+    assert "flat" in txt(ui.delta_chip(90.0, 90.0, True))
+    assert "no prior" in txt(ui.delta_chip(90.0, None, True))
+    # the class carries the same meaning as the words (colour is never the only signal)
+    assert ui.delta_chip(96.0, 95.0, True).className.endswith("d-good")
+    assert ui.delta_chip(78.0, 77.0, False).className.endswith("d-bad")
+
+
 def test_caption_agrees_with_picture():
     # source name says "Plushie" but the category is an action figure: the caption must not
     assert art.display_name("Titan Squad", "ACTION_FIGURE", "Titan Squad Plushie 147", "SKU-01723") \

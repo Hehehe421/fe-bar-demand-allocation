@@ -53,8 +53,10 @@ def _col(name: str, desc: str | None = None, syn: list[str] | None = None,
 # Revisions (``rev``): 1 = initial draft. 2 = column descriptions on the two
 # misleading ``forecast_*_13w`` columns, added after q11 summed an at-risk-only
 # column as if it were total demand. Instruction text starts thin (rev 1) on purpose.
+# 3 = the full specification of the build prompt (business and KPI instructions, 8 examples,
+# synonyms, metric views preferred, 13 objects): see ``space_full.py``.
 # --------------------------------------------------------------------------
-LATEST_REV: Final[int] = 2
+LATEST_REV: Final[int] = 3
 
 INSTRUCTION_REVISIONS: Final[list[dict[str, Any]]] = [
     {
@@ -241,4 +243,8 @@ def build(rev: int | None = None) -> dict[str, Any]:
 
 
 def dumps(rev: int | None = None) -> str:
+    if rev is None or rev >= 3:
+        from src.genie import space_full
+
+        return json.dumps(space_full.build(), indent=2)
     return json.dumps(build(rev), indent=2)

@@ -67,6 +67,21 @@ def verdict(
             _close(c, ref_rows[0][0]) for c in got_rows[0])
         return ("PASS", "scalar within 1%") if ok else (
             "FAIL", f"expected {ref_rows[0][0]}, got {got_rows[0]}")
+    if q.check == "values":
+        got_nums = [n for r in got_rows for c in r if (n := _num(c)) is not None]
+        want = [n for r in ref_rows for c in r if (n := _num(c)) is not None]
+        if not want:
+            return "FAIL", "reference has no numeric values (broken question)"
+        missing = [w for w in want
+                   if not any(abs(g - w) <= max(TOL * abs(w), 0.06) for g in got_nums)]
+        return ("PASS", f"all {len(want)} reference values found") if not missing else (
+            "FAIL", f"{len(missing)} of {len(want)} reference values missing, e.g. {missing[:3]}")
+    if q.check == "top1":
+        if not got_rows:
+            return "FAIL", "no rows"
+        miss = [v for v in ref_rows[0] if not any(_close(c, v) for c in got_rows[0])]
+        return ("PASS", "first row matches the reference's top row") if not miss else (
+            "FAIL", f"first row {got_rows[0]} lacks {miss}")
     if len(got_rows) != len(ref_rows):
         return "FAIL", f"{len(got_rows)} rows returned, reference has {len(ref_rows)}"
     pool = [list(r) for r in got_rows]

@@ -94,6 +94,39 @@ def main() -> int:
                     f"p90 {k['p90_cov']} (trend {k['p90_cov_trend']})")
     check("warehouse: governed KPIs", kp)
 
+    # 2a. Stage F items: KPI header, brand filter, product lookup, actuals, inbound ETAs ----
+    def strip():
+        k = b.kpi_strip(None)
+        n, pr = k["now"], k["prior"]
+        ok = bool(n and pr) and n["week"] > pr["week"] and 80 < n["fill"] <= 100 and k["revenue_at_risk"] > 1e6  # noqa: E501
+        return ok, (f"fill {n['fill']:.2f}% ({n['fill'] - pr['fill']:+.2f} pt vs {pr['week']}), "
+                    f"otif {n['otif']:.2f}%, ${k['revenue_at_risk']:,.0f} / {k['units_at_risk']:,.0f} units at risk")  # noqa: E501
+    check("lakebase: KPI header + WoW", strip)
+
+    def brand_filter():
+        bs = b.brands()
+        rows = b.worklist(None, ["CRITICAL", "HIGH"], brand=bs[0], limit=5000)
+        return bool(rows) and {r["brand"] for r in rows} == {bs[0]}, f"{len(bs)} brands; {bs[0]}: {len(rows)} rows"  # noqa: E501
+    check("lakebase: worklist brand filter", brand_filter)
+
+    def lookup():
+        i = b._pg_rows("SELECT COUNT(*) AS n, COUNT(*) FILTER (WHERE product_name IS NOT NULL) AS named "  # noqa: E501
+                       "FROM public.product_lookup")[0]
+        cols = {c["column_name"] for c in b._pg_rows(
+            "SELECT column_name FROM information_schema.columns WHERE table_name = 'product_lookup'")}  # noqa: E501
+        masked = cols & {"unit_cost_usd", "gross_margin_pct"}
+        return i["n"] == 2400 and not masked, f"{i['n']:,} SKUs, masked columns present: {sorted(masked) or 'none'}"  # noqa: E501
+    check("lakebase: product_lookup", lookup)
+
+    def hist():
+        h = b.sku_history(top["sku_id"], top["retailer_code"])
+        inbound = b.sku_inbound(top["sku_id"], "2026-09-26")
+        # a recent launch (this top SKU has 14 weeks) has a short history; it must have some
+        return len(h["weeks"]) >= 8 and h["backtest_wape"] is not None, (
+            f"{len(h['weeks'])} weeks actuals, backtest WAPE {h['backtest_wape']:.0f}%, "
+            f"{len(inbound)} open inbound shipments")
+    check("SKU detail: actuals + inbound ETAs", hist)
+
     # 2b. executive / performance / map data ------------------------------------
     def execd():
         e = b.exec_data(None)

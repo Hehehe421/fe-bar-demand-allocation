@@ -1,0 +1,114 @@
+2026-10-15T23:06:05Z [APP] 127.0.0.1 - - [15/Oct/2026 23:06:05] "[35m[1mPOST /_dash-update-component HTTP/1.1[0m" 500 -
+2026-10-15T23:06:06Z [HTTP] CLIENT [15/Oct/2026:23:06:05 +0000] "POST /_dash-update-component HTTP/1.1" 500 265 "-" "python-requests"
+2026-10-15T23:06:30Z [APP] 127.0.0.1 - - [15/Oct/2026 23:06:30] "POST /_dash-update-component HTTP/1.1" 200 -
+2026-10-15T23:06:30Z [HTTP] CLIENT [15/Oct/2026:23:06:06 +0000] "POST /_dash-update-component HTTP/1.1" 200 4529 "-" "python-requests"
+2026-10-15T23:06:30Z [APP] 127.0.0.1 - - [15/Oct/2026 23:06:30] "POST /_dash-update-component HTTP/1.1" 200 -
+2026-10-15T23:06:31Z [HTTP] CLIENT [15/Oct/2026:23:06:30 +0000] "POST /_dash-update-component HTTP/1.1" 200 442 "-" "python-requests"
+2026-10-15T23:06:49Z [APP] 127.0.0.1 - - [15/Oct/2026 23:06:49] "POST /_dash-update-component HTTP/1.1" 200 -
+2026-10-15T23:06:50Z [HTTP] CLIENT [15/Oct/2026:23:06:48 +0000] "POST /_dash-update-component HTTP/1.1" 200 916 "https://allocation-command-center-7474649643770783.aws.databricksapps.com/" "browser"
+2026-10-15T23:07:35Z [APP] 127.0.0.1 - - [15/Oct/2026 23:07:35] "GET / HTTP/1.1" 200 -
+2026-10-15T23:07:36Z [HTTP] CLIENT [15/Oct/2026:23:07:35 +0000] "GET / HTTP/1.1" 200 5833 "-" "python-requests"
+2026-10-15T23:07:36Z [APP] 127.0.0.1 - - [15/Oct/2026 23:07:36] "POST /_dash-update-component HTTP/1.1" 200 -
+2026-10-15T23:07:36Z [APP] 127.0.0.1 - - [15/Oct/2026 23:07:36] "POST /_dash-update-component HTTP/1.1" 200 -
+2026-10-15T23:07:37Z [HTTP] CLIENT [15/Oct/2026:23:07:36 +0000] "POST /_dash-update-component HTTP/1.1" 200 4094 "-" "python-requests"
+2026-10-15T23:07:37Z [HTTP] CLIENT [15/Oct/2026:23:07:36 +0000] "POST /_dash-update-component HTTP/1.1" 200 86518 "-" "python-requests"
+2026-10-15T23:07:37Z [APP] 127.0.0.1 - - [15/Oct/2026 23:07:37] "POST /_dash-update-component HTTP/1.1" 200 -
+2026-10-15T23:07:38Z [HTTP] CLIENT [15/Oct/2026:23:07:37 +0000] "POST /_dash-update-component HTTP/1.1" 200 22094 "-" "python-requests"
+2026-10-15T23:07:49Z [APP] 127.0.0.1 - - [15/Oct/2026 23:07:49] "POST /_dash-update-component HTTP/1.1" 200 -
+2026-10-15T23:07:50Z [HTTP] CLIENT [15/Oct/2026:23:07:48 +0000] "POST /_dash-update-component HTTP/1.1" 200 916 "https://allocation-command-center-7474649643770783.aws.databricksapps.com/" "browser"
+2026-10-15T23:07:58Z [APP] 127.0.0.1 - - [15/Oct/2026 23:07:58] "POST /_dash-update-component HTTP/1.1" 200 -
+2026-10-15T23:07:59Z [HTTP] CLIENT [15/Oct/2026:23:07:39 +0000] "POST /_dash-update-component HTTP/1.1" 200 2020 "-" "python-requests"
+2026-10-15T23:08:26Z [APP] 127.0.0.1 - - [15/Oct/2026 23:08:26] "POST /_dash-update-component HTTP/1.1" 200 -
+2026-10-15T23:08:27Z [HTTP] CLIENT [15/Oct/2026:23:07:58 +0000] "POST /_dash-update-component HTTP/1.1" 200 4920 "-" "python-requests"
+2026-10-15T23:08:27Z [APP] 127.0.0.1 - - [15/Oct/2026 23:08:27] "POST /_dash-update-component HTTP/1.1" 200 -
+2026-10-15T23:08:28Z [HTTP] CLIENT [15/Oct/2026:23:08:27 +0000] "POST /_dash-update-component HTTP/1.1" 200 442 "-" "python-requests"
+2026-10-15T23:08:49Z [APP] 127.0.0.1 - - [15/Oct/2026 23:08:49] "POST /_dash-update-component HTTP/1.1" 200 -
+2026-10-15T23:08:50Z [HTTP] CLIENT [15/Oct/2026:23:08:48 +0000] "POST /_dash-update-component HTTP/1.1" 200 916 "https://allocation-command-center-7474649643770783.aws.databricksapps.com/" "browser"
+2026-10-15T23:09:49Z [APP] 127.0.0.1 - - [15/Oct/2026 23:09:49] "POST /_dash-update-component HTTP/1.1" 200 -
+2026-10-15T23:09:50Z [HTTP] CLIENT [15/Oct/2026:23:09:48 +0000] "POST /_dash-update-component HTTP/1.1" 200 916 "https://allocation-command-center-7474649643770783.aws.databricksapps.com/" "browser"
+2026-10-15T23:10:49Z [APP] 127.0.0.1 - - [15/Oct/2026 23:10:49] "POST /_dash-update-component HTTP/1.1" 200 -
+2026-10-15T23:10:50Z [HTTP] CLIENT [15/Oct/2026:23:10:48 +0000] "POST /_dash-update-component HTTP/1.1" 200 916 "https://allocation-command-center-7474649643770783.aws.databricksapps.com/" "browser"
+2026-10-15T23:11:49Z [APP] 127.0.0.1 - - [15/Oct/2026 23:11:49] "POST /_dash-update-component HTTP/1.1" 200 -
+2026-10-15T23:11:50Z [HTTP] CLIENT [15/Oct/2026:23:11:48 +0000] "POST /_dash-update-component HTTP/1.1" 200 916 "https://allocation-command-center-7474649643770783.aws.databricksapps.com/" "browser"
+2026-10-15T23:12:49Z [APP] 127.0.0.1 - - [15/Oct/2026 23:12:49] "POST /_dash-update-component HTTP/1.1" 200 -
+2026-10-15T23:12:50Z [HTTP] CLIENT [15/Oct/2026:23:12:48 +0000] "POST /_dash-update-component HTTP/1.1" 200 916 "https://allocation-command-center-7474649643770783.aws.databricksapps.com/" "browser"
+2026-10-15T23:13:38Z [BUILD] [INFO] Starting deployment 01f1c8ee0b3e1d15a96a88b20160773c...
+2026-10-15T23:13:38Z [BUILD] [INFO] Downloading source code from /Workspace/Users/73bbee7a-df47-4bb9-b503-30e5b392657f/src/01f1c8ee0b3e1d15a96a88b20160773c
+2026-10-15T23:13:38Z [BUILD] [INFO] Updated file: python/source_code/app.py
+2026-10-15T23:13:38Z [BUILD] [INFO] Updated file: python/source_code/app.yaml
+2026-10-15T23:13:39Z [BUILD] [INFO] Updated file: python/source_code/art.py
+2026-10-15T23:13:39Z [BUILD] [INFO] Updated file: python/source_code/backend.py
+2026-10-15T23:13:39Z [BUILD] [INFO] Updated file: python/source_code/narrative.py
+2026-10-15T23:13:39Z [BUILD] [INFO] Updated file: python/source_code/requirements.txt
+2026-10-15T23:13:39Z [BUILD] [INFO] Updated file: python/source_code/settings.py
+2026-10-15T23:13:39Z [BUILD] [INFO] Updated file: python/source_code/ui.py
+2026-10-15T23:13:39Z [BUILD] [INFO] Updated file: python/source_code/assets/app.css
+2026-10-15T23:13:39Z [BUILD] [INFO] Updated file: python/source_code/data/kpi_baseline.csv
+2026-10-15T23:13:39Z [BUILD] [INFO] Requirements have not changed. Skipping installation.
+2026-10-15T23:13:39Z [BUILD] [INFO] Starting app with command: [python app.py]
+2026-10-15T23:13:41Z [BUILD] [INFO] Deployment 01f1c8ee0b3e1d15a96a88b20160773c ended in 3.462166185s
+2026-10-15T23:13:41Z [BUILD] [INFO] Deployment successful
+2026-10-15T23:13:48Z [APP] 127.0.0.1 - - [15/Oct/2026 23:13:48] "POST /_dash-update-component HTTP/1.1" 200 -
+2026-10-15T23:13:49Z [HTTP] CLIENT [15/Oct/2026:23:13:48 +0000] "POST /_dash-update-component HTTP/1.1" 200 916 "https://allocation-command-center-7474649643770783.aws.databricksapps.com/" "browser"
+2026-10-15T23:14:49Z [APP] 127.0.0.1 - - [15/Oct/2026 23:14:49] "POST /_dash-update-component HTTP/1.1" 200 -
+2026-10-15T23:14:50Z [HTTP] CLIENT [15/Oct/2026:23:14:48 +0000] "POST /_dash-update-component HTTP/1.1" 200 916 "https://allocation-command-center-7474649643770783.aws.databricksapps.com/" "browser"
+2026-10-15T23:15:49Z [APP] 127.0.0.1 - - [15/Oct/2026 23:15:49] "POST /_dash-update-component HTTP/1.1" 200 -
+2026-10-15T23:15:50Z [HTTP] CLIENT [15/Oct/2026:23:15:48 +0000] "POST /_dash-update-component HTTP/1.1" 200 916 "https://allocation-command-center-7474649643770783.aws.databricksapps.com/" "browser"
+2026-10-15T23:16:20Z [APP] 127.0.0.1 - - [15/Oct/2026 23:16:20] "GET / HTTP/1.1" 200 -
+2026-10-15T23:16:20Z [HTTP] CLIENT [15/Oct/2026:23:16:20 +0000] "GET / HTTP/1.1" 200 5833 "-" "python-requests"
+2026-10-15T23:16:20Z [APP] 127.0.0.1 - - [15/Oct/2026 23:16:20] "POST /_dash-update-component HTTP/1.1" 200 -
+2026-10-15T23:16:21Z [HTTP] CLIENT [15/Oct/2026:23:16:20 +0000] "POST /_dash-update-component HTTP/1.1" 200 4094 "-" "python-requests"
+2026-10-15T23:16:21Z [APP] 127.0.0.1 - - [15/Oct/2026 23:16:21] "POST /_dash-update-component HTTP/1.1" 200 -
+2026-10-15T23:16:22Z [HTTP] CLIENT [15/Oct/2026:23:16:21 +0000] "POST /_dash-update-component HTTP/1.1" 200 86518 "-" "python-requests"
+2026-10-15T23:16:23Z [APP] 127.0.0.1 - - [15/Oct/2026 23:16:23] "POST /_dash-update-component HTTP/1.1" 200 -
+2026-10-15T23:16:24Z [HTTP] CLIENT [15/Oct/2026:23:16:21 +0000] "POST /_dash-update-component HTTP/1.1" 200 22094 "-" "python-requests"
+2026-10-15T23:16:45Z [APP] 127.0.0.1 - - [15/Oct/2026 23:16:45] "POST /_dash-update-component HTTP/1.1" 200 -
+2026-10-15T23:16:46Z [HTTP] CLIENT [15/Oct/2026:23:16:26 +0000] "POST /_dash-update-component HTTP/1.1" 200 2145 "-" "python-requests"
+2026-10-15T23:16:49Z [APP] 127.0.0.1 - - [15/Oct/2026 23:16:49] "POST /_dash-update-component HTTP/1.1" 200 -
+2026-10-15T23:16:50Z [HTTP] CLIENT [15/Oct/2026:23:16:49 +0000] "POST /_dash-update-component HTTP/1.1" 200 916 "https://allocation-command-center-7474649643770783.aws.databricksapps.com/" "browser"
+2026-10-15T23:17:07Z [APP] 127.0.0.1 - - [15/Oct/2026 23:17:07] "POST /_dash-update-component HTTP/1.1" 200 -
+2026-10-15T23:17:07Z [APP] 127.0.0.1 - - [15/Oct/2026 23:17:07] "POST /_dash-update-component HTTP/1.1" 200 -
+2026-10-15T23:17:08Z [HTTP] CLIENT [15/Oct/2026:23:16:45 +0000] "POST /_dash-update-component HTTP/1.1" 200 4593 "-" "python-requests"
+2026-10-15T23:17:08Z [HTTP] CLIENT [15/Oct/2026:23:17:07 +0000] "POST /_dash-update-component HTTP/1.1" 200 442 "-" "python-requests"
+2026-10-15T23:17:49Z [APP] 127.0.0.1 - - [15/Oct/2026 23:17:49] "POST /_dash-update-component HTTP/1.1" 200 -
+2026-10-15T23:17:50Z [HTTP] CLIENT [15/Oct/2026:23:17:48 +0000] "POST /_dash-update-component HTTP/1.1" 200 916 "https://allocation-command-center-7474649643770783.aws.databricksapps.com/" "browser"
+2026-10-15T23:17:53Z [BUILD] [INFO] Starting deployment 01f1c8eea399123db97b99c1308dcefb...
+2026-10-15T23:17:53Z [BUILD] [INFO] Downloading source code from /Workspace/Users/73bbee7a-df47-4bb9-b503-30e5b392657f/src/01f1c8eea399123db97b99c1308dcefb
+2026-10-15T23:17:54Z [BUILD] [INFO] Updated file: python/source_code/app.py
+2026-10-15T23:17:54Z [BUILD] [INFO] Updated file: python/source_code/app.yaml
+2026-10-15T23:17:54Z [BUILD] [INFO] Updated file: python/source_code/art.py
+2026-10-15T23:17:54Z [BUILD] [INFO] Updated file: python/source_code/backend.py
+2026-10-15T23:17:54Z [BUILD] [INFO] Updated file: python/source_code/narrative.py
+2026-10-15T23:17:55Z [BUILD] [INFO] Updated file: python/source_code/requirements.txt
+2026-10-15T23:17:55Z [BUILD] [INFO] Updated file: python/source_code/settings.py
+2026-10-15T23:17:55Z [BUILD] [INFO] Updated file: python/source_code/ui.py
+2026-10-15T23:17:55Z [BUILD] [INFO] Updated file: python/source_code/assets/app.css
+2026-10-15T23:17:55Z [BUILD] [INFO] Updated file: python/source_code/data/kpi_baseline.csv
+2026-10-15T23:17:55Z [BUILD] [INFO] Requirements have not changed. Skipping installation.
+2026-10-15T23:17:55Z [BUILD] [INFO] Starting app with command: [python app.py]
+2026-10-15T23:17:56Z [APP] 2026-10-15 23:17:56,812 [acc] Dash is running on http://0.0.0.0:8000/
+2026-10-15T23:17:56Z [APP] 2026-10-15 23:17:56,826 [acc] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+2026-10-15T23:17:56Z [APP] 2026-10-15 23:17:56,826 [acc] [33mPress CTRL+C to quit[0m
+2026-10-15T23:17:57Z [BUILD] [INFO] Deployment 01f1c8eea399123db97b99c1308dcefb ended in 3.661791412s
+2026-10-15T23:17:57Z [BUILD] [INFO] Deployment successful
+2026-10-15T23:18:01Z [APP] 2026-10-15 23:18:01,452 [acc] 127.0.0.1 - - [15/Oct/2026 23:18:01] "GET / HTTP/1.1" 200 -
+2026-10-15T23:18:02Z [HTTP] CLIENT [15/Oct/2026:23:18:01 +0000] "GET / HTTP/1.1" 200 5832 "-" "python-requests"
+2026-10-15T23:18:02Z [APP] 2026-10-15 23:18:02,341 [acc] 127.0.0.1 - - [15/Oct/2026 23:18:02] "POST /_dash-update-component HTTP/1.1" 200 -
+2026-10-15T23:18:02Z [APP] 2026-10-15 23:18:02,768 [acc] 127.0.0.1 - - [15/Oct/2026 23:18:02] "POST /_dash-update-component HTTP/1.1" 200 -
+2026-10-15T23:18:03Z [HTTP] CLIENT [15/Oct/2026:23:18:01 +0000] "POST /_dash-update-component HTTP/1.1" 200 4094 "-" "python-requests"
+2026-10-15T23:18:03Z [HTTP] CLIENT [15/Oct/2026:23:18:02 +0000] "POST /_dash-update-component HTTP/1.1" 200 86518 "-" "python-requests"
+2026-10-15T23:18:05Z [APP] 2026-10-15 23:18:05,164 [acc] 127.0.0.1 - - [15/Oct/2026 23:18:05] "POST /_dash-update-component HTTP/1.1" 200 -
+2026-10-15T23:18:05Z [APP] 2026-10-15 23:18:05,773 [acc] serving endpoint toy-allocation-agent answered in 1775 ms (request id 1316b164-3f82-4b15-8181-6f379b06159c)
+2026-10-15T23:18:06Z [HTTP] CLIENT [15/Oct/2026:23:18:03 +0000] "POST /_dash-update-component HTTP/1.1" 200 22094 "-" "python-requests"
+2026-10-15T23:18:25Z [APP] 2026-10-15 23:18:25,750 [acc] genie space 01f1c8cc66d713fba1decec949c0740c answered in 18.3s, 4 rows, sql=True
+2026-10-15T23:18:25Z [APP] 2026-10-15 23:18:25,751 [acc] 127.0.0.1 - - [15/Oct/2026 23:18:25] "POST /_dash-update-component HTTP/1.1" 200 -
+2026-10-15T23:18:26Z [HTTP] CLIENT [15/Oct/2026:23:18:07 +0000] "POST /_dash-update-component HTTP/1.1" 200 2113 "-" "python-requests"
+2026-10-15T23:18:48Z [APP] 2026-10-15 23:18:48,899 [acc] 127.0.0.1 - - [15/Oct/2026 23:18:48] "POST /_dash-update-component HTTP/1.1" 200 -
+2026-10-15T23:18:49Z [HTTP] CLIENT [15/Oct/2026:23:18:48 +0000] "POST /_dash-update-component HTTP/1.1" 200 916 "https://allocation-command-center-7474649643770783.aws.databricksapps.com/" "browser"
+2026-10-15T23:18:51Z [APP] 2026-10-15 23:18:51,601 [acc] serving endpoint toy-allocation-agent answered in 25470 ms (request id 59c470ea-21fb-41c3-8f1a-b8165926322e)
+2026-10-15T23:18:51Z [APP] 2026-10-15 23:18:51,648 [acc] lakebase INSERT allocation.agent_interactions trace_id=59c470ea-21fb-41c3-8f1a-b8165926322e tools=['get_stockout_risk', 'get_inbound_eta', 'get_fill_rate_history', 'recommend_allocation']
+2026-10-15T23:18:51Z [APP] 2026-10-15 23:18:51,649 [acc] 127.0.0.1 - - [15/Oct/2026 23:18:51] "POST /_dash-update-component HTTP/1.1" 200 -
+2026-10-15T23:18:52Z [HTTP] CLIENT [15/Oct/2026:23:18:26 +0000] "POST /_dash-update-component HTTP/1.1" 200 4593 "-" "python-requests"
+2026-10-15T23:18:52Z [APP] 2026-10-15 23:18:52,221 [acc] lakebase INSERT allocation.allocation_decisions decision_id=39 SKU-01723/MASS_A action=accept planner_units=2796 recommended=2796 trace_id=59c470ea-21fb-41c3-8f1a-b8165926322e
+2026-10-15T23:18:52Z [APP] 2026-10-15 23:18:52,221 [acc] 127.0.0.1 - - [15/Oct/2026 23:18:52] "POST /_dash-update-component HTTP/1.1" 200 -
+2026-10-15T23:18:53Z [HTTP] CLIENT [15/Oct/2026:23:18:52 +0000] "POST /_dash-update-component HTTP/1.1" 200 442 "-" "python-requests"
