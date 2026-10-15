@@ -1,11 +1,12 @@
 # Handoff — read this first
 
 Self-contained brief for continuing this build in a fresh session. You should not
-need the previous conversation.
+need the previous conversations.
 
-**Repo:** https://github.com/Hehehe421/fe-bar-demand-allocation (public, 20 commits)
+**Repo:** https://github.com/Hehehe421/fe-bar-demand-allocation (public). Session 2's
+commits are **not pushed** — see the GH_TOKEN workaround in §3.
 **Local:** `/Users/sixuan.he/Documents/SA_fy27/fe-bar-demand-allocation`
-**Last session ended:** 2026-10-15
+**Last session ended:** 2026-10-15 (session 2; ids in `docs/PROVENANCE.md`)
 
 ---
 
@@ -15,45 +16,42 @@ A Databricks FE Bar submission built on a real customer case: a governed
 demand-forecasting and constrained-allocation loop for a licensed toy and
 collectibles manufacturer. All data synthetic.
 
-Two scope documents, and they are not interchangeable:
-
 | Document | Role |
 |---|---|
 | `../fe-bar-allocation/BUILD_PROMPT.md` | The **FE Bar rubric**. Six required stages, evidence contract, final checklist. Outside this repo. |
-| `docs/SCOPE_V2.md` | The **current plan**. Re-points the narrative at the DataRobot-compete conversation while still satisfying the rubric. **This supersedes the build order in BUILD_PROMPT §9.** |
+| `docs/SCOPE_V2.md` | The **plan this build followed**. Re-points the narrative at the DataRobot-compete conversation while still satisfying the rubric. Supersedes the build order in BUILD_PROMPT §9. |
 
-The narrative SCOPE_V2 builds toward:
+The narrative:
 
 > Governed features → auto-run experiments across algorithms → champion/
 > challenger in UC → **batch *and* real-time inference** → agent explains and
 > recommends → planner decides, and the decision is captured and measurable.
 
-AutoML appears once, early, as *"and yes, you can do it this way too."* It is
-shown, not sold.
+AutoML appears once, early, as *"and yes, you can do it this way too."* Shown, not sold.
 
 ### The three customer questions every artifact must serve
 
 | Question | Answered by |
 |---|---|
 | *Can this replace our incumbent AutoML platform?* | AutoML leaderboard (`03a`) **and** the hand-built sweep (`03`), same holdout |
-| *Is the MLOps real?* | Feature lineage → UC model + aliases → alias-only promotion → batch **+ real-time** → accuracy tracked per version |
+| *Is the MLOps real?* | Feature lineage → UC model + aliases → alias-only promotion → batch **+ real-time** (verified equal) → accuracy tracked per version |
 | *Where does lineage come from?* | `_source_file` on Bronze surviving into Gold → feature table → model → forecast, via `system.access.table_lineage` |
 
 ---
 
-## 2. State: 5 of 6 stages built
+## 2. State: 6 of 8 items built
 
 | Stage | State | Evidence |
 |---|---|---|
 | **A — Lakeflow** | Built | `evidence/01_lakeflow.md` |
 | **B — Unity Catalog** | Built | `evidence/02_unity_catalog.md` |
-| **C1 §A — AutoML** | Built, 18 trials | in `notebooks/exports/03a_automl.md` |
+| **C1 §A — AutoML** | Built, 18 trials | `notebooks/exports/03a_automl.md` |
 | **C1 §C — sweep** | Built, 7 candidates / 6 families | `evidence/03_ml_forecast.md` |
-| **C1 §D — real-time serving** | **BLOCKED** — see §5 | — |
-| **C2 — GenAI agent** | Built, live endpoint | `evidence/04_genai_agent.md` |
-| **D — Lakebase** | Built | `evidence/05_lakebase.md` |
-| **E — Genie** | Not built | — |
-| **F — App** | Not built | — |
+| **C1 §D — batch + real-time** | **Built and verified** | `evidence/03_ml_forecast.md`, notebook 03 §12–13 |
+| **C2 — GenAI agent** | Built, re-run on current data, endpoint serving v5 | `evidence/04_genai_agent.md` |
+| **D — Lakebase** | Built, trimmed to 2 synced tables | `evidence/05_lakebase.md` |
+| **E — Genie** | **Built**, 13/13, one intermittent error recorded | `evidence/06_genie.md` |
+| **F — App** | **Not built — START HERE** | — |
 | **Deck + docs** | Not built | — |
 
 ### Headline measured numbers (all computed, none asserted)
@@ -61,16 +59,26 @@ shown, not sold.
 - Baseline: **96.26%** fill rate, **86.14%** OTIF, **74,789** stockout-weeks,
   $5.51M lost revenue, $7.94M markdown, $2.12M air freight at **7.0x** ocean,
   3.06 turns on $101.5M invoiced — `evidence/metrics/kpi_baseline.csv`
-- Forecast: **67.36% WAPE** (lightgbm) vs **95.34%** seasonal-naive — 28 points
-- **The most credible output:** EVERGREEN **20.5%** WAPE vs SOCIAL_TREND
-  **110.2%**, with p90 covering only **74.7%** on trend items against a 90%
+- Forecast: LightGBM **≈67.4% WAPE** vs **95.34%** seasonal-naive. Across three
+  executions it landed at 67.36 / 67.56 / 67.42 — multi-threaded LightGBM spreads
+  ~0.2 points run to run. **Quote "about 67.4%", never two decimals.**
+- **The most credible output:** EVERGREEN **20.4%** WAPE vs SOCIAL_TREND
+  **109.9%**, with p90 covering only **74.1%** on trend items against a 90%
   target. Since p90 drives the risk table, exposure is *understated* on exactly
   the items that matter. Preserve this through any rebuild.
-- Agent: `Correctness` 20/22 but only **74.5%** of its numbers trace to tool
-  output; 5/22 answers fully grounded. A mechanical scorer caught what two LLM
-  judges missed.
-- Lakebase: 4 synced tables ONLINE matching UC row-for-row; **0.051 ms**
-  server-side point lookup; 25 decisions round-tripped to UC
+- `sklearn_hist_gbm` is **unstable** under Poisson loss: 92.99% on one run,
+  138.7% on the next, same hyperparameters. Reported as measured, not tuned.
+- Agent: `Correctness` 19/22 but only **73.9%** of its numbers trace to tool
+  output; 4/22 answers fully grounded (an earlier run: 20/22, 74.5%, 5/22).
+  A mechanical scorer catches what two LLM judges miss.
+- Lakebase: 2 synced tables ONLINE matching UC row-for-row (3,016 and 58,474);
+  25 decisions round-tripped to UC; 0.051 ms server-side point lookup.
+- Real-time vs batch: SKU-01723 / MASS_A, horizon 1 → p50 **2,154.33**, p90
+  **3,460.29** from the live endpoint, identical to `fe.score_batch`.
+  Median ~179 ms from a laptop including network.
+- Genie: 13/13 on the final space. q11 (forecast by brand) was answered wrongly
+  3 of 10 times before a metadata fix and 0 of 13 after (Fisher p ≈ 0.07:
+  suggestive, **not** conclusive — the evidence says so).
 
 ---
 
@@ -82,25 +90,25 @@ profile **`vm-summer-classic`**, workspace id `7474649643770783`.
 | Resource | Id / name | Note |
 |---|---|---|
 | Catalog | `toy_demand_allocation` | `bronze` `silver` `gold` `ml` |
-| Volumes | `bronze.landing`, `bronze.pipeline_meta` | 107 MB synthetic sources |
 | Cluster | `1008-205814-qhbfm7tc` | DBR 16.4 LTS ML, single node, 90-min autoterminate — **restart it** |
 | Warehouse | `a6857db5911f7af1` | auto-stops; **start before any SQL** |
 | Pipeline | `7c2d619c-4f3e-4ca2-add3-7376bd722d93` | medallion |
-| Experiment — sweep | `4347060009219469` | |
-| Experiment — agent | `2590193212819414` | |
-| Experiment — AutoML | `3440760213960864` | 18 trials, reusable |
-| Model — forecaster | `ml.demand_forecaster` | **v9 `@champion`** (lightgbm), **v10 `@challenger`** (xgboost). Registry tidied; only these two exist |
-| Model — agent | `ml.allocation_agent` | v4 `@champion` |
-| Endpoint — agent | `toy-allocation-agent` | **READY**, scale-to-zero |
-| Endpoint — forecaster | `toy-demand-forecaster`, `demand_forecaster` | **both UPDATE_FAILED** — §5 |
+| Experiments | sweep `4347060009219469` · agent `2590193212819414` · AutoML `3440760213960864` | |
+| Model — forecaster (batch) | `ml.demand_forecaster` | v13 `@champion` (lightgbm), v14 `@challenger` (xgboost); feature-backed, for `fe.score_batch` |
+| Model — forecaster (real-time) | `ml.demand_forecaster_rt` | v3 `@champion`, v4 `@challenger`; plain pyfunc, for serving |
+| Model — agent | `ml.allocation_agent` | v5 `@champion` |
+| Endpoint — forecaster | `toy-demand-forecaster` | **READY**, serves rt v3, scale-to-zero. A *deploy* takes 20–25 min (queue + build); scale-from-zero cold start was **not measured**, so warm it before a demo |
+| Endpoint — agent | `toy-allocation-agent` | **READY**, v5 at 100%; v4 left at 0% as a rollback (scale-to-zero, free) |
 | Lakebase project | `projects/toy-demand-alloc` | PG 17, Autoscaling |
 | Lakebase host | `ep-empty-butterfly-d2dihd0i.database.us-east-1.cloud.databricks.com` | |
-| UC online catalog | `toy_demand_alloc_online` | fronts Lakebase |
+| UC online catalog | `toy_demand_alloc_online` | 2 synced tables: `stockout_risk_current`, `forecast_next_13w` |
+| Genie space | `Demand & Allocation`, id `01f1c8cc66d713fba1decec949c0740c` | id also in `evidence/metrics/genie_space.json` |
 | Notebooks in workspace | `/Workspace/Users/sixuan.he@databricks.com/fe-bar-demand-allocation/notebooks/` | with outputs |
 | Source in workspace | `.../fe-bar-demand-allocation/src/` | re-upload after editing `src/` |
 
 **Personas are service principals**, not groups (UC resolves only account-level
-principals and this workspace has no account auth):
+principals and this workspace has no account auth). The unused `toy_*` workspace
+groups were deleted on 2026-10-15.
 
 | Persona | Application ID |
 |---|---|
@@ -109,9 +117,8 @@ principals and this workspace has no account auth):
 | `toy-finance` | `dd70e525-c0aa-4ca5-ade2-29671715871a` |
 | `toy-app-service` | `1c73204c-6b49-4db0-a860-300ba392393e` |
 
-**Conversation ID for `docs/PROVENANCE.md`:**
-`26e66d02-d19b-4610-94e9-07fcbdcb05dd` (already recorded). A new session has a
-new id — append it, don't replace.
+**Conversation ID for `docs/PROVENANCE.md`:** both sessions are already recorded.
+A new session has a new id — append a column, don't replace.
 
 ### Two environment gotchas
 
@@ -138,133 +145,98 @@ cell-by-cell on the cluster via the Command Execution API, with output captured
 verbatim into the committed `.ipynb` and auto-published to the workspace:
 
 ```bash
-python tools/dbx_notebook.py notebooks/03_demand_forecast.py \
+.venv/bin/python tools/dbx_notebook.py notebooks/03_demand_forecast.py \
     --cluster-id 1008-205814-qhbfm7tc
 ```
 
 Nothing is hand-edited. A failing cell is captured as an error and halts the
 run, so a committed notebook cannot show a passing cell that did not run.
-**Do not hand-edit a committed `.ipynb`** — the evidential value of every
-notebook rests on it being byte-faithful to the run that produced it.
+**Do not hand-edit a committed `.ipynb`.** Fix the `.py`, re-run. (If you spot a
+lint error *after* starting a run, kill and restart rather than editing the source
+mid-run — the `.py` must match what executed.)
 
 After editing anything under `src/`:
 
 ```bash
+find src tools -name __pycache__ -type d -prune -exec rm -rf {} +   # import-dir uploads these
 databricks workspace import-dir src \
   /Workspace/Users/sixuan.he@databricks.com/fe-bar-demand-allocation/src \
   --overwrite --profile vm-summer-classic
 ```
 
-`src/config.py` is the single source of truth for every name. Nothing hardcodes
-a catalog, table, warehouse, cluster or endpoint.
+`src/config.py` is the single source of truth for every name.
 
-**Commit discipline used so far:** one commit per stage with its evidence file;
-never commit a notebook with a failing cell; attribution line
-`Co-authored-by: Isaac <no-reply@databricks.com>`.
+**Evidence files** are generated by `tools/evidence_0N_*.py`. 03 and 06 compute their
+prose from the recorded run (03 used to hardcode headline numbers and silently
+contradicted a re-run — don't reintroduce that). **`evidence_03` reads
+`evidence/metrics/forecast_leaderboard.csv` from the repo, but the notebook writes
+it to a Volume.** After re-running notebook 03:
+
+```bash
+databricks fs cp dbfs:/Volumes/toy_demand_allocation/bronze/pipeline_meta/forecast_leaderboard.csv \
+  evidence/metrics/forecast_leaderboard.csv --overwrite --profile vm-summer-classic
+.venv/bin/python tools/evidence_03_ml_forecast.py
+```
+
+Forgetting this produced a stale leaderboard that looked identical to the old one.
+
+**Genie** (`src/genie/`): `python -m src.genie.create_space [--rev N]` builds the
+`serialized_space` in Python and PATCHes the space, then reads it back and compares;
+`python -m src.genie.run_questions --tag X` asks all 13 questions and scores them
+against reference SQL in `questions.py`; `python tools/evidence_06_genie.py` renders
+the evidence. `space_definition.LATEST_REV` is the current revision.
+
+**Commit discipline:** one commit per stage with its evidence file; never commit a
+notebook with a failing cell; end messages with
+`Co-authored-by: Isaac <no-reply@databricks.com>`; use `git commit --file=<path>`.
 
 ---
 
 ## 5. Next actions, in order
 
-### 5a. Diagnose the forecaster endpoint — START HERE
+### 5a. Stage F — the app (START HERE)
 
-**Both** `toy-demand-forecaster` (mine, scripted) and `demand_forecaster`
-(created manually in the UI) reached `UPDATE_FAILED`. Two independent deploys
-failing identically means it is **the model artifact, not the endpoint config**.
+"Allocation Command Center", a Databricks App reading from Lakebase:
+KPI header · at-risk worklist (`stockout_risk_current` by `severity_score`, filtered
+on `risk_tier`) · SKU detail (forecast p50/p90 from `forecast_next_13w`) · agent panel
+calling the live `toy-allocation-agent` and showing the trace id · **decide → writes
+to Lakebase** (`allocation.allocation_decisions`) · embedded Genie.
 
-**Read the build logs before changing anything.** A blind retry teaches nothing:
+- Stage D's story belongs *here*, narrated as decision capture rather than as synced
+  tables. Invoke the `dataviz` skill before any chart code; read
+  `databricks-app-python` (or `-apx`) first.
+- **Design point to settle:** none of the 2 synced tables hold the 33 model features,
+  so the app **cannot** build a real-time forecast request from Lakebase (the old
+  docstring claiming it could was wrong and has been corrected). Default: for a
+  "what-if" call, read the one feature row from `ml.demand_features_weekly` through the
+  warehouse (~1 s), post it to `toy-demand-forecaster`, and say so on screen. A third
+  synced table was considered and rejected to keep the read path at 2; revisit only if
+  the demo needs sub-100 ms what-ifs.
+- KPI header: `agg_fill_rate_summary` is **no longer synced**. Read fill rate / OTIF via
+  the warehouse (metric views) or compute from the app; do not re-add `svc_*` tables.
+- Retailer scoping lives in the app's own query (UC will not build an online copy of
+  a table with a row filter — `evidence/02`, `evidence/05`).
+- Add a warm-up call to `tests/smoke_app.py`: both serving endpoints scale to zero and
+  the forecaster's cold start is long.
+- Evidence: `evidence/07_app.md`.
 
-```bash
-databricks serving-endpoints get demand_forecaster --profile vm-summer-classic
-# then the served-entity build logs for the failing entity
-```
+### 5b. Deck and docs — protect this one
 
-**Leading hypothesis:** `ml.demand_forecaster` was logged with
-`fe.log_model(training_set=...)`, so it is feature-store-backed and the serving
-container tries to resolve a feature lookup against an online store that does
-not exist here (we deliberately have none).
+`deck/allocation_deck.{md,pdf}` · `docs/TALK_TRACK.md` (business **and** technical,
+90-second and 5-minute each) · `docs/ARCHITECTURE.md` · `docs/BUSINESS_CASE.md` ·
+`databricks.yml` · `tests/`
 
-**If confirmed, the clean fix:** log the same fitted estimator a *second* time as
-a plain sklearn/pyfunc model for the real-time endpoint, and keep the
-feature-backed version for `fe.score_batch`. Same lineage, no online store, no
-serving-time lookup.
+This is a separately scored FE Bar domain. **If time is short, do this before F:**
+a sharp compete story with honest gaps beats seven thin stages. The honest gaps to
+carry are in §2 (trend-item p90 under-coverage, grounding 73.9%, hist-GBM instability,
+Genie's intermittent table-choice error, LightGBM run-to-run spread).
 
-Useful fact already established: the model's signature marks the join keys
-(`sku_id`, `retailer_code`, `origin_week`, `horizon`) **required** and all 35
-feature columns **optional** — so a caller can supply features directly and skip
-the lookup. The app reads that feature row from Lakebase. `src/serving/deploy_forecaster.py`
-has a working `query()` / `feature_row()` that builds the request from the real
-Lakebase read path; point it anywhere with
-`FORECASTER_ENDPOINT=<name> python -m src.serving.deploy_forecaster --query-only`.
+### 5c. Optional
 
-### 5b. `fe.score_batch()` for the batch path
-
-Stage C1 currently rebuilds all 35 feature columns by hand to feed `predict`.
-**That is the training/serving skew the feature layer exists to prevent**, so it
-undercuts the MLOps argument it is meant to support. `score_batch` takes keys
-only and joins features from the model's registered lineage. Needs a notebook 03
-re-run. Also pass `env_manager="local"` anywhere `spark_udf` survives.
-
-### 5c. Trim synced tables 4 → 2 *(decided)*
-
-Keep `stockout_risk_current` and `forecast_next_13w`. Drop `product_lookup` and
-`fill_rate_summary`, and with them `gold.svc_product_lookup` /
-`gold.svc_fill_rate_summary` — those existed only to dodge the
-row-filter/column-mask restriction on online copies. **Keep the governance
-finding in `evidence/02`**; drop the tables.
-
-### 5d. Stage E — Genie
-
-`genie create-space WAREHOUSE_ID` takes an undocumented `serialized_space` JSON
-**string** that `get-space` does not echo back. Confirmed so far:
-
-```jsonc
-{
-  "version": 2,                                  // required, 1 or 2
-  "data_sources": {"tables": [{"identifier": "catalog.schema.table"}]},
-  "instructions": { }                            // object; sub-fields UNKNOWN
-}
-```
-
-Rejected: `datasets`, `example_queries`, `sample_questions`,
-`general_instructions`, `instructions.general`, and inside a table entry
-`full_name` / `name` / `table_name` / `catalog`+`schema`+`table`.
-
-**Two probe attempts were lost to shell quote escaping, not the API.** Build the
-payload in Python, `json.dumps` the inner space, write to a file, pass
-`--json @file`. No shell quoting in the path.
-
-**Faster route, probably worth taking:** build one space in the UI with
-instructions, a column synonym and one example query populated, then read its
-`serialized_space` back. Ten minutes of UI work replaces an unbounded probe.
-Clean up probes with `databricks genie trash-space <id>`.
-
-Then `src/genie/{create_space,run_questions}.py`, ≥10 questions via the
-Conversation API capturing the **generated SQL** and rows per question, including
-**one Genie got wrong plus the instruction change that fixed it** — the rubric
-explicitly wants that, and it is worth more than ten green checkmarks.
-
-### 5e. Stage F — App, absorbing Lakebase
-
-"Allocation Command Center" reading from Lakebase: KPI header · at-risk worklist
-(`stockout_risk_current` by `severity_score`, filtered on `risk_tier`) · SKU
-detail · agent panel calling the live `toy-allocation-agent` and showing the
-trace id · **decide → writes to Lakebase** · embedded Genie.
-
-Stage D's story belongs *here*, narrated as decision capture rather than as four
-synced tables. Invoke the `dataviz` skill before any chart code. Add a warm-up
-call to `tests/smoke_app.py` so the scale-to-zero endpoints do not cold-start
-mid-demo.
-
-### 5f. Deck and docs — protect this one
-
-`deck/allocation_deck.{md,pdf}` · `docs/TALK_TRACK.md` (business **and**
-technical, 90-second and 5-minute each) · `docs/ARCHITECTURE.md` ·
-`docs/BUSINESS_CASE.md` · `databricks.yml` · `tests/`
-
-**This is a separately scored FE Bar domain and the only remaining item that
-needs no debugging.** If time is short, do this before E and F: a sharp compete
-story with honest gaps beats six thin stages.
+- `fe.score_batch` currently runs only for the champion into `fct_demand_forecast`.
+  If the deck wants champion-vs-challenger accuracy per version, score the challenger
+  into `fct_demand_forecast_eval` too (the table already carries `model_version`).
+- Push: nothing from session 2 (commit `07e30ff` onward) has been pushed to GitHub.
 
 ---
 
@@ -274,133 +246,128 @@ story with honest gaps beats six thin stages.
 1. Databricks **MCP server is bound to the broken `DEFAULT` profile** (points at
    `fe-vm-vm-summer`, wrong workspace). Use the CLI/SDK with
    `profile="vm-summer-classic"`. `tools/dbsql.py` already does.
-2. `UID` is **readonly in zsh** — do not use it as a shell variable.
+2. `UID` is **readonly in zsh** — do not use it as a shell variable. Globs that match
+   nothing abort the command in zsh (`--include=*.md` in a `grep -r` did).
 3. Long compound shell commands can trip the `--no-verify` guard hook. Split
    them and use `git commit --file=<path>` for long messages.
+4. **The training runtime is not the serving runtime.** DBR 16.4 ML ships Python
+   3.12, **pandas 1.5.3**, MLflow **2.21.3**, scikit-learn 1.4.2, lightgbm 4.5.0,
+   databricks-feature-engineering 0.10.2. `importlib.metadata.version("mlflow")`
+   raises on the cluster — use `mlflow.__version__`. There is no `uv` on the cluster;
+   `python -m pip install uv` works.
 
-**MLflow / packages**
-4. MLflow 3 (`mlflow.genai`, `ResponsesAgent`) needs a **notebook-scoped
-   `%pip install` + `dbutils.library.restartPython()`**. A plain or `--target`
-   install does not take path precedence; `--target` fails on a protobuf conflict.
-5. **Pin `pyopenssl>=24.2`** with any MLflow 3 install. It pulls cryptography
-   50.x which the runtime's pyOpenSSL cannot load, failing far from the cause as
-   `AttributeError: module 'lib' has no attribute 'GEN_EMAIL'`. **This cost three
-   separate debug cycles.**
-6. **Do not upgrade MLflow in `03a_automl`** — it breaks `databricks.automl`'s
-   import via the same collision. AutoML works on the stock runtime.
-7. AutoML logs **`val_root_mean_squared_error`**, not `val_rmse`. Ordering by a
-   metric that does not exist returns an arbitrary order that looks plausible.
-8. `search_model_versions` returns objects whose `.tags` / `.aliases` are
-   **bound methods**. Use `registered_models.get(name, include_aliases=True)`
-   (returns a dict of alias→version) and `get_model_version` for tags.
-9. `mlflow.genai.scorers.Guidelines` **requires** a global `guidelines=` list —
-   it cannot read per-row expectations.
-10. **Do not decorate `ResponsesAgent.predict` with `@mlflow.trace`.** MLflow
-    auto-traces it; the duplicate root span makes traces fail to load with
-    "span data is corrupted".
-11. Declare **`httpx` explicitly** in `pip_requirements` for anything serving the
-    `openai` client, or the endpoint deploys READY and fails every request.
-12. `EndpointCoreConfigInput` requires `name`.
-13. Query a ResponsesAgent endpoint on the **raw `/invocations` route** with
-    `{"input": [...]}`. `WorkspaceClient.query()` wraps into legacy
-    `{"inputs": ...}` and is rejected.
-14. **MLflow prompt registry is disabled org-wide** (`FEATURE_DISABLED: CreatePrompt`).
-    `src/agent/prompt_store.py` is the UC-backed substitute: versioned,
-    SHA-256 content-addressed, governed. Inside Model Serving it falls back to
-    the source-file tier because the endpoint identity cannot reach the
-    warehouse — granting that SP `SELECT` on `ml.prompt_versions` + `CAN USE` on
-    the warehouse would close it.
+**Model serving (all of these were hit on the forecaster)**
+5. **A model logged with `fe.log_model` cannot be deployed to Model Serving here.**
+   Serving reads the feature-lookup spec and tries to set up an online feature store:
+   "Online feature store setup failed". This build has none, deliberately. Register a
+   **plain-pyfunc twin** for serving (`ml.demand_forecaster_rt`) and keep the
+   feature-backed one for `fe.score_batch`.
+6. **Never register the bare estimator.** Anything built outside it (calendar columns,
+   categorical levels, p90) is missing at inference. `forecasting.pyfunc_model.
+   DemandForecaster` carries `build_matrix` + p50 + p90; training and serving share
+   one implementation.
+7. **Never pin serving dependencies from the training runtime.** `pandas==1.5.3` has
+   no Python 3.12 wheel, so the image tries to compile it and the build dies in ~100 s
+   (`No module named 'pkg_resources'`). Pin `pandas==2.2.3`.
+8. **A failed build is reported only after a ~20–25 min queue.** Validate first:
+   notebook 03 builds the model's `requirements.txt` into a fresh Python 3.12 venv
+   (`uv`, `--only-binary :all:`) and compares forecasts before anything is deployed.
+9. `fe.log_model(flavor=mlflow.pyfunc, model=<PythonModel>, code_paths=[...],
+   pip_requirements=[...])` works. `fe.score_batch(..., result_type=
+   "struct<forecast_p50:double,forecast_p90:double>")` returns both quantiles from keys.
+10. A `FeatureLookup` on a table **without** a timeseries column: `lookup_key` is
+    positional against the primary key, so `["sku_id","retailer_code","origin_week"]`
+    maps `origin_week` onto `week_end_date`.
+11. **Boosting results vary run to run** (±0.2 WAPE for LightGBM; hist-GBM can
+    diverge). Hash-based sampling fixes row *membership*, not row order or threading.
+
+**MLflow / packages (agent notebook)**
+12. MLflow 3 (`mlflow.genai`, `ResponsesAgent`) needs a **notebook-scoped
+    `%pip install` + `dbutils.library.restartPython()`**. A plain or `--target`
+    install does not take path precedence.
+13. **Pin `pyopenssl>=24.2`** with any MLflow 3 install, or `AttributeError: module
+    'lib' has no attribute 'GEN_EMAIL'` surfaces far from the cause.
+14. **Do not upgrade MLflow in `03a_automl`** — it breaks `databricks.automl`.
+15. AutoML logs **`val_root_mean_squared_error`**, not `val_rmse`.
+16. `search_model_versions` returns objects whose `.tags` / `.aliases` are **bound
+    methods**. Use `registered_models.get(name, include_aliases=True)` and
+    `get_model_version`. (The CLI `registered-models get` without
+    `--include-aliases` showed no aliases for a model that had two.)
+17. `mlflow.genai.scorers.Guidelines` **requires** a global `guidelines=` list.
+18. **Do not decorate `ResponsesAgent.predict` with `@mlflow.trace`.**
+19. Declare **`httpx` explicitly** in `pip_requirements` for anything serving `openai`.
+20. `EndpointCoreConfigInput` requires `name`.
+21. Query a ResponsesAgent endpoint on the **raw `/invocations` route** with
+    `{"input": [...]}`.
+22. **MLflow prompt registry is disabled org-wide.** `src/agent/prompt_store.py` is the
+    UC-backed substitute. Inside Model Serving it falls back to the source-file tier.
 
 **Unity Catalog**
-15. Gold objects are **materialized views** — policies and column comments attach
-    with `ALTER MATERIALIZED VIEW`; `ALTER TABLE` fails `EXPECT_TABLE_NOT_VIEW`.
-16. A policy UDF needs **`RETURNS <type>` and `COMMENT` before `RETURN`**.
-17. **UC tag policies constrain values.** `data_product` ∈
-    {analytics, machine_learning, data_engineering}; `sensitivity` ∈
-    {pii, internal, public}; `pii` ∈ {ssn, address} — it is a *classification*
-    key, so `pii='false'` is semantically wrong, not just rejected. Project
-    detail goes on free-form keys.
-18. **The column mask hides `unit_cost_usd` / `gross_margin_pct` from every
-    identity including the catalog owner.** Any cost arithmetic must read from
-    `silver.product_master`. This bit the KPI baseline and the agent's allocator.
-19. Metric views need **DBR 17.2+** — create and query them through the
-    serverless warehouse, never the 16.4 cluster.
-20. **UC refuses to build an online copy of a table carrying a row filter or
-    column mask**: *"cannot have both row/column security and online
-    materialized views"*. That is UC closing a governance hole — the replica
-    would sit outside the policy.
+23. Gold objects are **materialized views** — `ALTER MATERIALIZED VIEW`, not `ALTER TABLE`.
+24. A policy UDF needs **`RETURNS <type>` and `COMMENT` before `RETURN`**.
+25. **UC tag policies constrain values.** `data_product` ∈ {analytics,
+    machine_learning, data_engineering}; `sensitivity` ∈ {pii, internal, public};
+    `pii` ∈ {ssn, address}.
+26. **The column mask hides `unit_cost_usd` / `gross_margin_pct` from every identity
+    including the catalog owner.** Cost arithmetic reads `silver.product_master`. Genie
+    inherits the mask and (correctly) reports the value as unavailable.
+27. Metric views need **DBR 17.2+** — create/query them through the serverless warehouse.
+28. **UC refuses an online copy of a table with a row filter or column mask.** Kept as a
+    governance finding in `evidence/02` and `evidence/05`; the tables that needed it
+    (`product_lookup`, `fill_rate_summary`) and their `svc_*` projections were dropped.
 
 **Lakebase**
-21. **Provisioned Lakebase is retired.** Use `databricks postgres` (Autoscaling),
-    never `databricks database`.
-22. Synced tables need **`new_pipeline_spec.storage_catalog`** because this
-    metastore uses Default Storage and has `storage_root = None`. **The CLI
-    rejects that field client-side**, warns "unknown field", stores `null`, and
-    the table fails — which looks exactly like the API not supporting it. **The
-    API does support it.** POST to `/api/2.0/postgres/synced_tables`. This was
-    misdiagnosed as an unfixable platform limitation and cost two days.
-23. Credentials come from `w.postgres.generate_database_credential(endpoint=...)`
-    using the **endpoint** resource path.
+29. **Provisioned Lakebase is retired.** Use `databricks postgres` (Autoscaling).
+30. Synced tables need **`new_pipeline_spec.storage_catalog`**. **The CLI rejects that
+    field client-side** and stores `null`; the **API supports it**. POST to
+    `/api/2.0/postgres/synced_tables` (what `src/lakebase/sync.py` does).
+31. Credentials come from `w.postgres.generate_database_credential(endpoint=...)`.
+32. Deleting a synced table via the API also removes its sync pipeline. The pipelines
+    named `Synced table: …` are the **live** ones, not orphans.
 
 **Pipelines**
-24. SDP forbids `DataFrame.collect()` inside a decorated function — use a window.
-25. Do not mix `expect_all_or_fail` with `expect_all_or_drop`: every expectation
-    is evaluated against the dataset the function returns, so a fail-rule
-    asserting post-conversion validity trips on exactly the rows the drop rules
-    exist to remove, and halts the update.
+33. SDP forbids `DataFrame.collect()` inside a decorated function — use a window.
+34. Do not mix `expect_all_or_fail` with `expect_all_or_drop`.
+
+**Genie**
+35. The `serialized_space` schema is **documented** in the `genie-rooms` skill
+    (`references/example-serialized-space.json`) and returned by
+    `GET /api/2.0/genie/spaces/{id}?include_serialized_space=true`. The CLI `get-space`
+    omits it without that query parameter. Build the payload in Python.
+36. **The server concatenates `content` array entries with no separator** — two bare
+    sentences came back as `synthetic.Retailer`. Give every entry its own `\n`.
+37. **Genie is non-deterministic.** One pass proves nothing; q11 was wrong 3 of 10 times
+    on the same space. Measure with repeats before claiming a fix worked.
+38. Score Genie against reference SQL, and **audit the scorer too**: of the first run's
+    3 FAILs, one was my scorer, one was my ambiguous question, and one was Genie.
 
 ---
 
-## 7. Known checklist deviation
+## 7. Cost — check before and after
 
-The §11 gate wants a grep for
-`TODO|FIXME|stub|skeleton|placeholder|NotImplemented` to come back empty. It
-returns **3 hits, all the same benign code comment** in notebook 03 and its two
-generated artifacts:
+Last measured 2026-10-13 from `system.billing.usage`: **this build is ~4%** of the
+workspace's 7-day spend. Nothing added since is always-on: both serving endpoints scale
+to zero, Lakebase idles, the cluster terminates, Genie uses the auto-stopping warehouse.
 
-```python
-fwd["target_units"] = 0.0  # placeholder; prep() needs the column, value unused
-```
-
-It describes an unused dummy column, not unimplemented work. Deliberately **not**
-fixed by hand: rewording the `.py` without re-executing would leave the committed
-`.ipynb` describing source that no longer matches it. Clears on the next notebook
-03 execution — reword to `# unused sentinel; prep() requires the column` and
-re-run. Worth batching with 5b, which needs that re-run anyway.
+**Three pre-existing always-on serving endpoints belonging to other engagements are
+~78%** at roughly 288 DBU/day between them — about 8,600 DBU/month. They are on the
+brief's do-not-touch list and were left alone. If they are no longer needed,
+scale-to-zero or deletion is the single biggest saving in this workspace. Raise it
+with the owner; do not act unilaterally.
 
 ---
 
-## 8. Cost — check before and after
-
-Measured 2026-10-13 from `system.billing.usage`: **this build is ~4%** of the
-workspace's 7-day spend. The agent endpoint has drawn 0 DBU since 10-09
-(scale-to-zero works), Lakebase idles, the cluster terminates.
-
-**Three pre-existing always-on serving endpoints belonging to other engagements
-are ~78%** at roughly 288 DBU/day between them — about 8,600 DBU/month. They are
-on the brief's do-not-touch list and were left alone. If they are no longer
-needed, scale-to-zero or deletion is the single biggest saving in this workspace.
-Raise it with the owner; do not act unilaterally.
-
-**Clutter worth removing** (all unreferenced, none deleted without asking):
-4 orphaned `Synced table:` pipelines from the failed sync attempts · 4 unused
-workspace-local `toy_*` groups · stale `src/features/` and `src/__pycache__/` in
-the workspace upload · the two `UPDATE_FAILED` forecaster endpoints once 5a is
-resolved.
-
----
-
-## 9. Things to carry into the next session
+## 8. Things to carry into the next session
 
 - **Honesty over coverage.** The evidence is worth something because the failures
-  are in it: the 74.5% grounding result, the p90 under-coverage on trend items,
-  the misdiagnosed Lakebase blocker. Do not smooth those out.
+  are in it: the 73.9% grounding result, the p90 under-coverage on trend items, the
+  three stacked endpoint defects, the Genie error and the p ≈ 0.07 that does not prove
+  the fix. Do not smooth those out.
 - **Read the skill before probing an API.** `databricks-ml-training`,
-  `databricks-model-serving`, `databricks-genie`, `databricks-app-python`.
-  Hand-probing the feature API cost cycles *and* still produced two wrong
-  conclusions that the skill would have corrected immediately.
-- **When a CLI says a field is unknown, check the API.** That single assumption
-  cost two days on Stage D.
-- **Do not start a stage you cannot finish.** Three times this session, stopping
-  at a clean boundary and writing down the findings was worth more than a
-  half-built artifact. The repo has no stubs because of it.
+  `databricks-model-serving`, `databricks-genie`, `genie-rooms`, `databricks-app-python`.
+  The Genie schema was "unknown" for two sessions and was in a skill the whole time.
+- **When a CLI says a field is unknown, check the API.**
+- **Reproduce a failure before changing config.** The forecaster endpoint failed three
+  different ways in sequence; each fix exposed the next, and each retry cost a 25-minute
+  queue. The local/venv validation in notebook 03 exists so the next one fails in seconds.
+- **Do not start a stage you cannot finish.** The repo has no stubs because of it.

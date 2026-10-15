@@ -1,6 +1,9 @@
 # Scope v2 — for review before building
 
-**Status: proposal. Nothing in here is built yet except where marked REUSE.**
+**Status 2026-10-15: executed through Stage E.** A, B, C1 (batch and real-time),
+C2, D and E are built and evidenced; F (app) and the deck/docs remain. Decisions in
+§5 are all done. The build-order table in §6 is kept as originally estimated. Read
+`docs/HANDOFF.md` for current state; this file is the plan it followed.
 
 Scope v1 built to the FE Bar rubric alone. This version keeps the rubric but
 re-points the narrative at the compete conversation the customer is actually
@@ -127,10 +130,10 @@ Space over the Gold tables *and the metric views*, with instructions, column
 synonyms and curated example SQL, then ≥10 questions via the Conversation API
 including one the space got wrong plus the instruction fix.
 
-Partial progress: the undocumented `serialized_space` schema is half-mapped
-(`version: 2`, `data_sources.tables[].identifier`, `instructions` is an object)
-— see `docs/NEXT_STEPS.md`. The remaining sub-fields are fastest obtained by
-building one space in the UI and reading its serialized form back.
+**Status 2026-10-15: BUILT.** See `evidence/06_genie.md`. The `serialized_space`
+schema turned out to be documented in the `genie-rooms` skill and readable via
+`GET /api/2.0/genie/spaces/{id}?include_serialized_space=true`; no UI round trip or
+blind probing was needed.
 
 ### Stage F — App · **NOT BUILT. Absorbs Lakebase.**
 

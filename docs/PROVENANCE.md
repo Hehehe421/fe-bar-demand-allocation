@@ -1,17 +1,17 @@
 # Provenance
 
-## Session
+## Sessions
 
-| | |
-|---|---|
-| Conversation ID | `26e66d02-d19b-4610-94e9-07fcbdcb05dd` |
-| Agent | Claude Code (Opus 5, 1M context), model ID `system.ai.claude-opus-5[1m]` |
-| Build date | 2026-10-08 |
-| Operator | Sixuan He, Solutions Architect, Databricks |
+| | Session 1 | Session 2 |
+|---|---|---|
+| Conversation ID | `26e66d02-d19b-4610-94e9-07fcbdcb05dd` | `a64aa061-e4cb-41a3-896a-efc5806921bd` |
+| Agent | Claude Code (Opus 5, 1M context), `system.ai.claude-opus-5[1m]` | Claude Code (Sonnet 5.5, 1M context), `system.ai.claude-sonnet-5-5[1m]` |
+| Date | 2026-10-08 to 2026-10-14 | 2026-10-15 |
+| Work | Stages A, B, C1, C2, D; scope v2 | Servable forecaster and endpoint fix, synced-table trim, agent re-run, Stage E (Genie) |
+| Operator | Sixuan He, Solutions Architect, Databricks | same |
 
-The conversation ID is confirmed from two independent paths: the session
-transcript at
-`~/.claude/projects/-Users-sixuan-he-Documents-SA-fy27/26e66d02-d19b-4610-94e9-07fcbdcb05dd.jsonl`
+Each conversation ID is confirmed from two independent paths: the session
+transcript at `~/.claude/projects/-Users-sixuan-he-Documents-SA-fy27/<id>.jsonl`
 and the agent's per-session task directory under `/private/tmp`.
 
 ## Target workspace
@@ -40,7 +40,7 @@ workspace was read, cloned, modified or deleted — see "Not touched" below.
 - Volumes `bronze.landing` (synthetic source files) and `bronze.pipeline_meta`
   (Auto Loader schema metadata, deliberately separate from the source volume)
 - 6 Bronze streaming tables, 6 Silver materialized views, 8 Gold materialized views
-- Metric views `gold.mv_fill_rate`, `gold.mv_otif`, `gold.mv_weeks_of_supply`
+- Metric views `gold.mv_fill_rate`, `gold.mv_otif`, `gold.mv_weeks_of_supply`, `gold.mv_forecast_accuracy`
 - Policy UDFs `gold.rf_retailer_scope` (row filter), `gold.cm_cost_margin` (column mask)
 
 **Identities** — four service principals, used as the governance personas.
@@ -54,10 +54,23 @@ account-level auth, so workspace-local groups could not be used for grants.
 | `toy-finance` | `dd70e525-c0aa-4ca5-ade2-29671715871a` |
 | `toy-app-service` | `1c73204c-6b49-4db0-a860-300ba392393e` |
 
-**Workspace-local groups** `toy_planner_mass_a`, `toy_data_scientist`,
-`toy_finance`, `toy_app_service` were created before the account-principal
-constraint was understood. They are **unused** — no grant or policy references
-them — and are safe to delete.
+**Workspace-local groups** `toy_*` were created before the account-principal
+constraint was understood, were never referenced by any grant or policy, and were
+deleted on 2026-10-15.
+
+**Models and serving (added in session 2)** — `ml.demand_forecaster` (feature-backed,
+for `fe.score_batch`), `ml.demand_forecaster_rt` (plain pyfunc, for real-time),
+`ml.allocation_agent`; endpoints `toy-demand-forecaster` and `toy-allocation-agent`.
+Probe objects created while diagnosing the endpoint failure (`_probe_*` models and
+feature table, an experiment, a throwaway endpoint) and the failed
+`demand_forecaster` endpoint were deleted on 2026-10-15.
+
+**Genie (session 2)** — space `Demand & Allocation`, id in
+`evidence/metrics/genie_space.json`.
+
+**Lakebase** — Autoscaling project `toy-demand-alloc`, UC online catalog
+`toy_demand_alloc_online`, two synced tables (`stockout_risk_current`,
+`forecast_next_13w`).
 
 **Entitlement grant** — FEVM metastore permission grant
 `01a11d4d-e63c-76e9-9e43-3b88acd9f26c`, use case `lakebase`, which confers
