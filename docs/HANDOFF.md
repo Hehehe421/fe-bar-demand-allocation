@@ -234,6 +234,15 @@ on top, then the worklist with filters and CSV export, forecast, real-time check
   table drops the app role's `SELECT`.
 - The decision is not written back to UC by the app; `src/lakebase/writeback.py` does that.
 
+### 5a-bis. Rubric gaps — read `docs/RUBRIC_AUDIT.md` before the deck
+
+An audit against the FE Bar rubric (2026-10-15) found two **gate failures** (the customer name is
+in two pushed commits' history; three hits on the forbidden-word list), and five substantive gaps:
+Genie configured thinner than §E specifies, 2 of the 4 named synced tables, no `databricks.yml`,
+the app missing week-over-week deltas / brand filter / actuals / ETAs, and lineage evidence that
+stops at Gold. The point-in-time lookup was dropped by an earlier decision and the rubric asks for
+it. Each has an ID (G1–G14), a severity and an effort estimate there.
+
 ### 5b. Deck and docs — START HERE
 
 `deck/allocation_deck.{md,pdf}` · `docs/TALK_TRACK.md` (business **and** technical,
