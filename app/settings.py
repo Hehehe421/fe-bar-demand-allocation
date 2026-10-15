@@ -54,3 +54,12 @@ CATEGORICAL = ("brand", "category", "license_family", "lifecycle_stage", "channe
 
 RETAILERS = ("MASS_A", "MASS_B", "ETAIL_C")
 TIERS = ("CRITICAL", "HIGH", "MEDIUM", "LOW")
+
+#: Illustrative distribution-centre locations (regional hubs, NOT surveyed addresses).
+#: The synthetic catalog only names four regions; these coordinates place them on a map.
+DC_GEO = {
+    "DC_EAST": {"label": "East Coast DC", "lat": 40.74, "lon": -74.17, "city": "Newark, NJ"},
+    "DC_CENTRAL": {"label": "Central DC", "lat": 41.88, "lon": -87.63, "city": "Chicago, IL"},
+    "DC_SOUTH": {"label": "South DC", "lat": 33.75, "lon": -84.39, "city": "Atlanta, GA"},
+    "DC_WEST": {"label": "West Coast DC", "lat": 34.06, "lon": -117.65, "city": "Ontario, CA"},
+}

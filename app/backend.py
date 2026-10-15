@@ -16,10 +16,13 @@ principal when deployed, the developer's CLI profile locally. No token is stored
 
 from __future__ import annotations
 
+import csv
 import json
+import pathlib
 import re
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 import psycopg
@@ -74,7 +77,8 @@ def _pg_rows(query: str, params: tuple | list = ()) -> list[dict[str, Any]]:
         return list(cur.fetchall())
 
 
-def worklist(scope: str | None, tiers: list[str], limit: int = 250) -> list[dict[str, Any]]:
+def worklist(scope: str | None, tiers: list[str], limit: int = 250,
+             family: str | None = None) -> list[dict[str, Any]]:
     """At-risk rows ranked by severity, each with the planner's latest decision."""
     return _pg_rows(
         """
@@ -90,10 +94,11 @@ def worklist(scope: str | None, tiers: list[str], limit: int = 250) -> list[dict
         ) d ON TRUE
         WHERE (%(scope)s::text IS NULL OR r.retailer_code = %(scope)s::text)
           AND r.risk_tier = ANY(%(tiers)s)
+          AND (%(family)s::text IS NULL OR r.license_family = %(family)s::text)
         ORDER BY r.severity_score DESC, r.sku_id
         LIMIT %(limit)s
         """,
-        {"scope": scope, "tiers": tiers or ["__none__"], "limit": limit},
+        {"scope": scope, "tiers": tiers or ["__none__"], "limit": limit, "family": family},
     )
 
 
@@ -391,3 +396,215 @@ _SAFE = re.compile(r"[^A-Za-z0-9_\-]")
 def clean_id(s: str | None) -> str:
     """SKU / retailer ids go into an agent prompt; keep them to the id alphabet."""
     return _SAFE.sub("", s or "")
+
+
+# --------------------------------------------------------------------------
+# Executive and performance views
+# --------------------------------------------------------------------------
+
+_SCOPE = "(%(scope)s::text IS NULL OR r.retailer_code = %(scope)s::text)"
+
+
+def exec_data(scope: str | None) -> dict[str, Any]:
+    """Everything the executive tab needs, from Lakebase. Queries run concurrently."""
+    sc = {"scope": scope}
+    q = {
+        "tiers": (f"""SELECT r.risk_tier, COUNT(*) AS n, COALESCE(SUM(r.revenue_at_risk_usd),0)::float AS rev,
+                   COALESCE(SUM(r.units_at_risk),0)::float AS units
+            FROM public.stockout_risk_current r WHERE {_SCOPE} GROUP BY 1""", sc),
+        "families": (f"""SELECT r.license_family, COUNT(*) AS n, COALESCE(SUM(r.revenue_at_risk_usd),0)::float AS rev,
+                   COUNT(*) FILTER (WHERE r.risk_tier = 'CRITICAL') AS critical
+            FROM public.stockout_risk_current r WHERE {_SCOPE} GROUP BY 1 ORDER BY rev DESC""", sc),
+        "accounts": (f"""SELECT r.retailer_code, COUNT(*) AS n, COALESCE(SUM(r.revenue_at_risk_usd),0)::float AS rev,
+                   COUNT(*) FILTER (WHERE r.risk_tier = 'CRITICAL') AS critical
+            FROM public.stockout_risk_current r WHERE {_SCOPE} GROUP BY 1 ORDER BY rev DESC""", sc),
+        "coverage": (f"""SELECT COUNT(*) FILTER (WHERE r.risk_tier = 'CRITICAL') AS critical,
+                   COUNT(*) FILTER (WHERE r.risk_tier = 'CRITICAL' AND r.weeks_to_stockout <= 2) AS soon,
+                   COUNT(*) FILTER (WHERE r.risk_tier = 'CRITICAL' AND EXISTS (
+                       SELECT 1 FROM allocation.allocation_decisions d
+                       WHERE d.sku_id = r.sku_id AND d.retailer_code = r.retailer_code)) AS decided,
+                   MIN(r.projected_stockout_week) AS first_stockout
+            FROM public.stockout_risk_current r WHERE {_SCOPE}""", sc),
+        "top": (f"""SELECT r.sku_id, r.retailer_code, r.brand, r.license_family, r.lifecycle_stage, r.risk_tier,
+                   r.revenue_at_risk_usd::float AS rev, r.units_at_risk::float AS units,
+                   r.weeks_to_stockout, r.projected_stockout_week, d.action AS last_action
+            FROM public.stockout_risk_current r
+            LEFT JOIN LATERAL (SELECT x.action FROM allocation.allocation_decisions x
+                               WHERE x.sku_id = r.sku_id AND x.retailer_code = r.retailer_code
+                               ORDER BY x.decided_at DESC LIMIT 1) d ON TRUE
+            WHERE {_SCOPE} ORDER BY r.revenue_at_risk_usd DESC LIMIT 5""", sc),
+        "forecast": ("SELECT MIN(origin_week) AS origin, MAX(model_version) AS model_version, "
+                     "MAX(algorithm) AS algorithm FROM public.forecast_next_13w", ()),
+    }
+    with ThreadPoolExecutor(max_workers=len(q)) as ex:
+        futs = {k: ex.submit(_pg_rows, sql_, params) for k, (sql_, params) in q.items()}
+        out = {k: f.result() for k, f in futs.items()}
+    out["coverage"] = out["coverage"][0]
+    out["forecast"] = out["forecast"][0]
+    return out
+
+
+def decision_stats_full() -> dict[str, Any]:
+    st = _pg_rows(
+        """SELECT COUNT(*) AS n,
+                  COUNT(*) FILTER (WHERE action = 'accept') AS accepted,
+                  COUNT(*) FILTER (WHERE action = 'override') AS overridden,
+                  COUNT(*) FILTER (WHERE action = 'defer') AS deferred,
+                  COALESCE(SUM(override_delta_units) FILTER (WHERE action = 'override'), 0) AS net_units,
+                  COALESCE(SUM(ABS(override_delta_units)) FILTER (WHERE action = 'override'), 0) AS gross_units
+           FROM allocation.allocation_decisions""")[0]
+    return st
+
+
+def decision_log(limit: int = 12) -> list[dict[str, Any]]:
+    return _pg_rows(
+        """SELECT decision_id, sku_id, retailer_code, action, recommended_units, planner_units,
+                  override_delta_units, planner_id, left(coalesce(rationale_text, ''), 90) AS why,
+                  decided_at
+           FROM allocation.allocation_decisions ORDER BY decided_at DESC, decision_id DESC LIMIT %s""",
+        (limit,))
+
+
+_ttl_cache: dict[str, tuple[float, Any]] = {}
+
+
+def _cached(key: str, ttl: float, fn):
+    hit = _ttl_cache.get(key)
+    if hit and time.time() - hit[0] < ttl:
+        return hit[1]
+    val = fn()
+    _ttl_cache[key] = (time.time(), val)
+    return val
+
+
+def performance(scope: str | None, ttl: float = 900) -> dict[str, Any]:
+    """Trend, accuracy by family and fill rate vs commitment, from the metric views."""
+    def run() -> dict[str, Any]:
+        g = f"{S.CATALOG}.gold"
+        flt = "WHERE Retailer = :r" if scope else ""
+        p = {"r": scope} if scope else None
+        _, fill = _wh(f"SELECT Week, MEASURE(`Fill Rate Pct`) FROM {g}.mv_fill_rate {flt} "
+                      f"GROUP BY Week ORDER BY Week", p)
+        _, otif = _wh(f"SELECT Week, MEASURE(`OTIF Pct`) FROM {g}.mv_otif {flt} "
+                      f"GROUP BY Week ORDER BY Week", p)
+        fam_cols, fam = _wh(
+            f"SELECT `License Family`, MEASURE(`WAPE Pct`), MEASURE(`Bias Pct`), "
+            f"MEASURE(`P90 Coverage Pct`), MEASURE(`Actual Units`) FROM {g}.mv_forecast_accuracy "
+            f"{flt} GROUP BY ALL ORDER BY 2", p)
+        _, acct = _wh(f"SELECT Retailer, MEASURE(`Fill Rate Pct`) FROM {g}.mv_fill_rate "
+                      f"GROUP BY Retailer ORDER BY Retailer")
+        _, commit = _wh(f"SELECT DISTINCT retailer_code, contractual_fill_commitment "
+                        f"FROM {g}.dim_retailer_dc")
+        commit_map = {r[0]: float(r[1]) * 100 for r in commit}
+        return {
+            "weeks": [r[0] for r in fill][-52:],
+            "fill": [float(r[1]) for r in fill][-52:],
+            "otif": [float(r[1]) for r in otif][-52:],
+            "families": [{"family": r[0], "wape": float(r[1]), "bias": float(r[2]),
+                          "p90_cov": float(r[3]), "units": float(r[4])} for r in fam],
+            "accounts": [{"account": r[0], "fill": float(r[1]), "commit": commit_map.get(r[0])}
+                         for r in acct],
+        }
+    return _cached(f"perf:{scope}", ttl, run)
+
+
+def dc_exposure(scope: str | None, ttl: float = 900) -> list[dict[str, Any]]:
+    """At-risk exposure attributed to distribution centres.
+
+    Each at-risk SKU x account row is spread over the DCs that served that SKU x account in
+    the last 13 weeks, in proportion to unconstrained demand. So the map answers "where is
+    the at-risk demand physically served from", using the demand fact's own DC grain.
+    """
+    def run() -> list[dict[str, Any]]:
+        g = f"{S.CATALOG}.gold"
+        flt = "WHERE r.retailer_code = :r" if scope else ""
+        p = {"r": scope} if scope else None
+        _, rows = _wh(f"""
+            WITH last AS (SELECT MAX(week_end_date) AS m FROM {g}.fct_demand_weekly),
+            share AS (SELECT sku_id, retailer_code, dc_code, SUM(true_demand_units) AS u
+                      FROM {g}.fct_demand_weekly, last
+                      WHERE week_end_date > date_sub(last.m, 91) GROUP BY 1, 2, 3),
+            tot AS (SELECT sku_id, retailer_code, SUM(u) AS t FROM share GROUP BY 1, 2)
+            SELECT s.dc_code,
+                   SUM(r.revenue_at_risk_usd * s.u / NULLIF(t.t, 0)) AS revenue_at_risk,
+                   SUM(r.units_at_risk * s.u / NULLIF(t.t, 0)) AS units_at_risk,
+                   SUM(CASE WHEN r.risk_tier = 'CRITICAL' THEN s.u / NULLIF(t.t, 0) ELSE 0 END) AS critical,
+                   COUNT(DISTINCT r.sku_id) AS skus
+            FROM {g}.fct_stockout_risk r
+            JOIN share s ON s.sku_id = r.sku_id AND s.retailer_code = r.retailer_code
+            JOIN tot t ON t.sku_id = r.sku_id AND t.retailer_code = r.retailer_code
+            {flt} GROUP BY s.dc_code ORDER BY revenue_at_risk DESC""", p)
+        out = []
+        for dc, rev, units, crit, skus in rows:
+            geo = S.DC_GEO.get(dc, {})
+            out.append({"dc": dc, "label": geo.get("label", dc), "city": geo.get("city", ""),
+                        "lat": geo.get("lat"), "lon": geo.get("lon"),
+                        "revenue": float(rev or 0), "units": float(units or 0),
+                        "critical": float(crit or 0), "skus": int(skus or 0)})
+        return out
+    return _cached(f"dc:{scope}", ttl, run)
+
+
+_info_cache: dict[str, dict[str, Any]] = {}
+
+
+def sku_info(skus: list[str]) -> dict[str, dict[str, Any]]:
+    """Catalog attributes for artwork and captions. Cached for the process lifetime."""
+    need = [s for s in dict.fromkeys(skus) if s and s not in _info_cache]
+    if need:
+        ids = ", ".join("'" + clean_id(s) + "'" for s in need)
+        cols, rows = _wh(
+            f"SELECT sku_id, product_name, brand, category, license_family, lifecycle_stage "
+            f"FROM {S.CATALOG}.gold.dim_product WHERE sku_id IN ({ids})")
+        for r in rows:
+            _info_cache[r[0]] = dict(zip(cols, r, strict=True))
+    return {s: _info_cache[s] for s in skus if s in _info_cache}
+
+
+def baseline() -> dict[str, dict[str, Any]]:
+    """The Stage B business baseline (a dated snapshot, shipped with the app)."""
+    here = pathlib.Path(__file__).resolve().parent
+    for path in (here / "data" / "kpi_baseline.csv", here.parent / "evidence/metrics/kpi_baseline.csv"):
+        if path.exists():
+            with path.open() as fh:
+                return {r["kpi"]: r for r in csv.DictReader(fh)}
+    return {}
+
+
+def service_status() -> dict[str, dict[str, str]]:
+    """Health of the pieces the app depends on, cached briefly. Never raises."""
+    def run() -> dict[str, dict[str, str]]:
+        out: dict[str, dict[str, str]] = {}
+        t0 = time.perf_counter()
+        try:
+            _pg_rows("SELECT 1 AS ok")
+            out["Lakebase"] = {"state": "ok", "note": f"{(time.perf_counter() - t0) * 1000:.0f} ms"}
+        except Exception as e:  # noqa: BLE001
+            out["Lakebase"] = {"state": "down", "note": str(e)[:80]}
+        try:
+            wh = w().warehouses.get(S.WAREHOUSE_ID)
+            st = str(wh.state.value if wh.state else "?")
+            out["Warehouse"] = {"state": "ok" if st == "RUNNING" else "idle", "note": st.lower()}
+        except Exception as e:  # noqa: BLE001
+            out["Warehouse"] = {"state": "down", "note": str(e)[:80]}
+        for label, name in (("Agent", S.AGENT_ENDPOINT), ("Forecaster", S.FORECASTER_ENDPOINT)):
+            try:
+                ep = w().serving_endpoints.get(name)
+                ready = str(ep.state.ready.value if ep.state and ep.state.ready else "?")
+                msg = ""
+                ents = (ep.config.served_entities if ep.config else None) or []
+                if ents and ents[0].state and ents[0].state.deployment_state_message:
+                    msg = ents[0].state.deployment_state_message
+                scaled = "scaled to zero" in msg.lower()
+                out[label] = {"state": "idle" if scaled else ("ok" if ready == "READY" else "down"),
+                              "note": "scaled to zero" if scaled else ready.lower()}
+            except Exception as e:  # noqa: BLE001
+                out[label] = {"state": "down", "note": str(e)[:80]}
+        return out
+    return _cached("status", 45, run)
+
+
+def clear_caches() -> None:
+    """Drop cached warehouse results (the Refresh button)."""
+    _ttl_cache.clear()
+    _kpi_cache.clear()

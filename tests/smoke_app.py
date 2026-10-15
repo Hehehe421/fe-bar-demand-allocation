@@ -94,6 +94,45 @@ def main() -> int:
                     f"p90 {k['p90_cov']} (trend {k['p90_cov_trend']})")
     check("warehouse: governed KPIs", kp)
 
+    # 2b. executive / performance / map data ------------------------------------
+    def execd():
+        e = b.exec_data(None)
+        t_rev = sum(float(t["rev"]) for t in e["tiers"])
+        ok = e["coverage"]["critical"] == 434 and t_rev > 1e6 and len(e["top"]) == 5
+        return ok, f"{e['coverage']['critical']} critical, ${t_rev:,.0f} at risk, top {e['top'][0]['sku_id']}"  # noqa: E501
+    check("executive aggregates", execd)
+
+    def perfd():
+        p = b.performance(None)
+        ok = len(p["weeks"]) == 52 and len(p["families"]) == 3 and len(p["accounts"]) == 3
+        return ok, f"{len(p['weeks'])} weeks, fill {p['fill'][-1]:.1f}% otif {p['otif'][-1]:.1f}%"
+    check("performance trends", perfd)
+
+    def dcd():
+        dc = b.dc_exposure(None)
+        t = sum(float(x["rev"]) for x in b.exec_data(None)["tiers"])
+        s_ = sum(d["revenue"] for d in dc)
+        # attribution must CONSERVE revenue: spreading rows over DCs may not create or lose any
+        return abs(s_ - t) / t < 0.001, f"{len(dc)} DCs sum to ${s_:,.0f} vs total ${t:,.0f}"
+    check("DC exposure conserves revenue", dcd)
+
+    def info():
+        i = b.sku_info([top["sku_id"]])
+        return top["sku_id"] in i and i[top["sku_id"]]["category"] in ("PLUSH", "ACTION_FIGURE"), \
+            str(i.get(top["sku_id"], {}).get("product_name"))
+    check("catalog attributes for art", info)
+
+    def stat():
+        s_ = b.service_status()
+        return set(s_) == {"Lakebase", "Warehouse", "Agent", "Forecaster"} and s_["Lakebase"]["state"] == "ok", \
+            ", ".join(f"{k}={v['state']}" for k, v in s_.items())  # noqa: E501
+    check("service status", stat)
+
+    def bl():
+        x = b.baseline()
+        return float(x["lost_revenue_usd"]["value"]) > 1e6, f"{len(x)} baseline KPIs"
+    check("business baseline snapshot", bl)
+
     # 3. write path (rolled back) ---------------------------------------------
     def write():
         with b.pg() as conn:

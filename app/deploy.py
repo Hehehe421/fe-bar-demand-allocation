@@ -49,7 +49,7 @@ from tools.dbsql import sql  # noqa: E402
 
 APP_DIR = ROOT / "app"
 APP_NAME = config.APP_NAME
-FILES = ("app.py", "backend.py", "settings.py", "requirements.txt")
+FILES = ("app.py", "backend.py", "settings.py", "art.py", "narrative.py", "ui.py", "requirements.txt")
 
 
 def genie_space_id() -> str:
@@ -163,6 +163,7 @@ def build_dir() -> pathlib.Path:
     for f in FILES:
         shutil.copy(APP_DIR / f, out / f)
     shutil.copytree(APP_DIR / "assets", out / "assets")
+    shutil.copytree(APP_DIR / "data", out / "data")      # the dated KPI baseline snapshot
     (out / "app.yaml").write_text(render_app_yaml())
     return out
 
