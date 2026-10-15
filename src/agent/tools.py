@@ -129,14 +129,14 @@ def get_stockout_risk(
                retailer_demand_share, forecast_p50_13w, forecast_p90_13w,
                wholesale_price_usd, contractual_fill_commitment,
                model_version, model_alias
-        FROM {config.FCT_STOCKOUT_RISK}
+        FROM {config.AGENT_STOCKOUT_SOURCE}
         WHERE {' AND '.join(where)}
         ORDER BY severity_score DESC, revenue_at_risk_usd DESC
         LIMIT {int(limit)}
         """
     )
     return {
-        "source_table": config.FCT_STOCKOUT_RISK,
+        "source_table": config.AGENT_STOCKOUT_SOURCE,
         "units": "eaches",
         "row_count": len(rows),
         "rows": rows,
@@ -294,7 +294,7 @@ def recommend_allocation(sku_id: str, week_end_date: str | None = None) -> dict[
                r.sku_inbound_horizon_units, r.risk_tier,
                p.case_pack, p.gross_margin_pct, p.brand, p.license_family,
                p.lifecycle_stage
-        FROM {config.FCT_STOCKOUT_RISK} r
+        FROM {config.AGENT_STOCKOUT_SOURCE} r
         LEFT JOIN {config.fq('gold', 'dim_product')} p ON p.sku_id = r.sku_id
         WHERE r.sku_id = '{_q(sku_id)}'
         ORDER BY r.severity_score DESC
@@ -352,7 +352,7 @@ def recommend_allocation(sku_id: str, week_end_date: str | None = None) -> dict[
     result = allocate(sku_id, supply, claims, week_end_date)
     d = result.to_dict()
     d.update({
-        "source_tables": [config.FCT_STOCKOUT_RISK, config.MV_FILL_RATE],
+        "source_tables": [config.AGENT_STOCKOUT_SOURCE, config.MV_FILL_RATE],
         "supply_breakdown": {
             "on_hand_units": on_hand,
             "inbound_within_horizon_units": inbound,

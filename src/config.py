@@ -200,6 +200,31 @@ FMAPI_ENDPOINT_PREFERENCE: Final[tuple[str, ...]] = (
 
 AGENT_MODEL_NAME: Final[str] = fq("ml", "allocation_agent")
 AGENT_ENDPOINT_NAME: Final[str] = "toy-allocation-agent"
+#: What the agent's tools read for stockout risk: a view over FCT_STOCKOUT_RISK, not the
+#: table. OBSERVED, cause not isolated: the deployed endpoint could read six declared
+#: Unity Catalog objects (materialized views, a metric view and two Delta tables) but got
+#: INSUFFICIENT_PERMISSIONS on SELECT for this one table, even though it was declared and
+#: even though another service principal (the app's) reads it fine. Declaring it first or
+#: last made no difference. Reading it through a view, as the endpoint already does for
+#: the materialized views, is the workaround.
+AGENT_STOCKOUT_SOURCE: Final[str] = fq("gold", "v_stockout_risk")
+
+#: Unity Catalog objects the agent's tools and prompt store read at inference time.
+#: They MUST be declared as model resources when the agent is logged: Model Serving
+#: runs the tools as the endpoint's own identity, which is granted access only to
+#: declared resources. Leaving them out deployed an endpoint whose every tool call
+#: failed with INSUFFICIENT_PERMISSIONS (USE CATALOG) -- invisible to the in-notebook
+#: evaluation, which runs as the developer.
+AGENT_UC_TABLES: Final[tuple[str, ...]] = (
+    AGENT_STOCKOUT_SOURCE,
+    fq("gold", "fct_inbound_eta"),
+    fq("gold", "fct_inventory_position"),
+    fq("gold", "dim_product"),
+    fq("gold", "mv_fill_rate"),
+    fq("ml", "supplier_doc_chunks"),
+    fq("ml", "prompt_versions"),
+)
+
 AGENT_EXPERIMENT: Final[str] = "/Users/sixuan.he@databricks.com/toy_demand_allocation_agent"
 PROMPT_REGISTRY_NAME: Final[str] = fq("ml", "allocation_analyst_system_prompt")
 

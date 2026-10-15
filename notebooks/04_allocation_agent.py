@@ -173,6 +173,30 @@ print("--- first 700 chars of the versioned template ---")
 print(loaded.template[:700])
 
 # %% [markdown]
+# ## 2b. The agent reads stockout risk through a view
+#
+# The deployed endpoint runs its tools as its own identity, which gets access only to the
+# resources declared below. In practice it could read six declared objects (materialized
+# views, the metric view, two Delta tables) but not `gold.fct_stockout_risk` itself:
+# `INSUFFICIENT_PERMISSIONS ... does not have SELECT on Table`, although it was declared and
+# although the app's service principal reads the same table without trouble. The cause was
+# not isolated; declaring it first or last changed nothing. The endpoint does read views, so
+# the tools read this view, which is a plain projection and changes no number.
+
+# %%
+spark.sql(f"""
+CREATE OR REPLACE VIEW {config.AGENT_STOCKOUT_SOURCE}
+COMMENT 'Read-through view over gold.fct_stockout_risk for the allocation agent.
+Identical rows and columns; it exists only because the serving endpoint could not
+SELECT the table directly.'
+AS SELECT * FROM {config.FCT_STOCKOUT_RISK}
+""")
+n_view = spark.table(config.AGENT_STOCKOUT_SOURCE).count()
+n_tbl = spark.table(config.FCT_STOCKOUT_RISK).count()
+print(f"{config.AGENT_STOCKOUT_SOURCE}: {n_view:,} rows  (table: {n_tbl:,})")
+assert n_view == n_tbl
+
+# %% [markdown]
 # ## 3. The five tools, each exercised directly
 #
 # Before letting the model choose, every tool is called once here so its real
@@ -927,7 +951,11 @@ print(export.to_string(index=False))
 # explicit.
 
 # %%
-from mlflow.models.resources import DatabricksServingEndpoint, DatabricksSQLWarehouse
+from mlflow.models.resources import (
+    DatabricksServingEndpoint,
+    DatabricksSQLWarehouse,
+    DatabricksTable,
+)
 
 with mlflow.start_run(run_name="log_allocation_agent") as log_run:
     mlflow.set_tags({
@@ -952,6 +980,11 @@ with mlflow.start_run(run_name="log_allocation_agent") as log_run:
         resources=[
             DatabricksServingEndpoint(endpoint_name=resolved.name),
             DatabricksSQLWarehouse(warehouse_id=config.WAREHOUSE_ID),
+            # The tools run as the endpoint's own identity, which receives access only
+            # to declared resources. Without these the deployed endpoint answered every
+            # question with "insufficient privileges on the catalog" -- while the
+            # in-notebook evaluation, run as the developer, looked healthy.
+            *[DatabricksTable(table_name=t) for t in config.AGENT_UC_TABLES],
         ],
         registered_model_name=config.AGENT_MODEL_NAME,
     )
@@ -1055,3 +1088,23 @@ print("=" * 80)
 print(text)
 print("=" * 80)
 print("\ncustom_outputs:", json.dumps(raw.get("custom_outputs"), default=str)[:600])
+
+# %% [markdown]
+# ### The live endpoint's tools must actually work
+#
+# A deployed agent can answer fluently while every tool call behind it fails, and the
+# prose then reads as a plausible refusal. So check the tool outputs themselves, not
+# the answer: any `function_call_output` carrying an error fails this cell.
+
+# %%
+calls = {o["call_id"]: o["name"] for o in raw["output"] if o.get("type") == "function_call"}
+results = []
+for o in raw["output"]:
+    if o.get("type") == "function_call_output":
+        body = o.get("output") or ""
+        results.append((calls.get(o["call_id"], "?"), '"error"' in body[:200], body[:140]))
+for name, bad, snippet in results:
+    print(f"  {'FAIL' if bad else 'ok  '} {name:24} {snippet!r}")
+assert results, "the agent called no tools: nothing was verified"
+assert not any(bad for _, bad, _ in results), "a live tool call returned an error"
+print(f"\nall {len(results)} live tool calls returned data")
