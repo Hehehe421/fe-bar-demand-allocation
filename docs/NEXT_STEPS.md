@@ -402,6 +402,38 @@ route to a training set from declarative features, replacing
 **Then drop the legacy artifact:** `ml.demand_features_weekly` (287,966 rows,
 created with `fe.create_table`) once the view is serving training.
 
+## Step 6 — Genie: write the probe to a FILE, not a shell string
+
+The `serialized_space` sub-fields for instructions, column synonyms and curated
+example SQL are still unmapped. Two attempts have now been lost to **shell
+quote escaping**, not to the API: the payload needs JSON nested inside a JSON
+string inside a shell argument, and the escaping collapses silently, so the
+command fails in a way that produces no useful error. The second attempt
+returned five blank results and created nothing.
+
+Do it from Python instead — build the dict, `json.dumps` the inner space, and
+post via the SDK or `--json @file`. No shell quoting in the path at all:
+
+```python
+space = {"version": 2,
+         "data_sources": {"tables": [{"identifier": "..."}]},
+         "instructions": {"<probe field>": ...}}
+body = {"warehouse_id": WH, "title": "_probe",
+        "serialized_space": json.dumps(space)}
+pathlib.Path("/tmp/space.json").write_text(json.dumps(body))
+# databricks genie create-space --json @/tmp/space.json
+```
+
+Confirmed so far: `version` (1 or 2, required), `data_sources` is an object with
+a `tables` list keyed on `identifier`, `instructions` is an object whose
+sub-fields are unknown (`general` is rejected). Rejected at top level:
+`datasets`, `example_queries`, `sample_questions`, `general_instructions`.
+
+Faster alternative, and probably worth taking: build one space in the **UI** with
+instructions, a synonym and one example query populated, then read its
+`serialized_space` back. Ten minutes of UI work replaces an unbounded probe.
+Clean up probe spaces with `databricks genie trash-space <id>`.
+
 ## Remaining stages
 
 **D — Lakebase.** New instance (`config.LAKEBASE_INSTANCE`), synced tables for
