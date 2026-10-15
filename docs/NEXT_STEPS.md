@@ -267,6 +267,79 @@ also registers two further `demand_forecaster` versions and moves the
 `@champion` / `@challenger` aliases, so it is worth batching with other Stage C1
 work rather than doing for a comment alone.
 
+## Step 2 — Feature View: API fully mapped, ready to build
+
+Pre-flight is done. Everything below was verified by probing the live cluster,
+so `03b_feature_view.py` can be written straight against it.
+
+**Install (pin pyopenssl from the start):**
+
+```python
+%pip install -q "databricks-feature-engineering>=0.18" "pyopenssl>=24.2"
+dbutils.library.restartPython()
+```
+
+The runtime ships 0.10.2, which has **no** declarative-feature API. 0.18.1 has
+it. `pyopenssl>=24.2` is not optional: the upgrade pulls cryptography 50.x which
+the runtime's pyOpenSSL 24.0.0 cannot load, and the failure surfaces far from
+the cause — `AttributeError: module 'lib' has no attribute 'GEN_EMAIL'` on an
+unrelated import. It cost two debug cycles in C2 and another in 03a.
+
+**Exact signatures (probed, not guessed):**
+
+```python
+from databricks.ml_features.entities.data_source import DeltaTableSource
+from databricks.ml_features.entities.column_selection import ColumnSelection
+from databricks.feature_engineering import FeatureEngineeringClient
+
+# NOT exported at the top level of databricks.feature_engineering
+DeltaTableSource(*, catalog_name: str, schema_name: str, table_name: str,
+                 filter_condition: str | None = None,
+                 transformation_sql: str | None = None,
+                 dataframe_schema: str | None = None,
+                 lateness: SourceLateness | None = None)
+# note: takes catalog/schema/table SEPARATELY, not full_name, and carries
+# neither entity_columns nor timeseries_column -- those live on create_feature
+
+ColumnSelection(column: str)          # one Feature per column
+
+fe.create_feature(*, source: DataSource,
+                  function: AggregationFunction | ColumnSelection | CustomUDF,
+                  catalog_name: str, schema_name: str,
+                  entity: list[str] | None = None,
+                  timeseries_column: str | None = None,
+                  name: str | None = None,
+                  description: str | None = None) -> Feature
+
+fe.materialize_features(*, features: list[Feature],
+                        offline_config: OfflineStoreConfig | None = None,
+                        online_config: OnlineStoreConfig | None = None,
+                        trigger: CronSchedule | TableTrigger | ...)
+```
+
+**Leave `online_config` unset.** Offline only — online feature serving is
+explicitly out of scope for this demo and is a distraction in a compete
+conversation.
+
+**Shape of the work.** The 35 features in `03_demand_forecast` each become one
+`create_feature(..., function=ColumnSelection("<col>"))` over a
+`DeltaTableSource` on `gold.fct_demand_weekly`, with
+`entity=["sku_id","retailer_code"]` and
+`timeseries_column="week_end_date"`. The lag/rolling/momentum columns are
+derived, so either compute them in the source's `transformation_sql` or
+materialise a derived table first and point the source at that — the former is
+more idiomatic and keeps the derivation governed.
+
+Other relevant client methods discovered: `compute_features`,
+`backfill_features`, `list_features`, `get_feature`, `delete_feature`,
+`list_materialized_features`, and
+`feature_spec_from_batch_declarative_features` — that last one is the likely
+route to a training set from declarative features, replacing
+`create_training_set(feature_lookups=[...])`. Confirm its signature first.
+
+**Then drop the legacy artifact:** `ml.demand_features_weekly` (287,966 rows,
+created with `fe.create_table`) once the view is serving training.
+
 ## Remaining stages
 
 **D — Lakebase.** New instance (`config.LAKEBASE_INSTANCE`), synced tables for
