@@ -229,27 +229,22 @@ LAKEBASE_SYNC_SCHEMA: Final[str] = "public"
 #: Gold tables replicated into Lakebase for the app's low-latency read path.
 #: Keys are Lakebase table names, values are the UC sources.
 #:
-#: `product_lookup` and `fill_rate_summary` read from `svc_*` serving
-#: projections rather than from `dim_product` / `agg_fill_rate_summary`
-#: directly. Unity Catalog refuses to create an online copy of a table that
-#: carries a row filter or column mask -- "cannot have both row/column security
-#: and online materialized views" -- because the online copy would sit outside
-#: the policy. That is UC closing a governance hole, not an obstacle to work
-#: around: `svc_product_lookup` therefore omits the masked cost and margin
-#: columns entirely, so there is nothing left to protect.
+#: Only the two tables the app actually reads. Two more (`product_lookup`,
+#: `fill_rate_summary`) were built and then removed, together with the
+#: `gold.svc_*` projections that existed only to feed them. The reason is a
+#: governance finding worth keeping: Unity Catalog refuses to create an online copy
+#: of a table that carries a row filter or column mask -- "cannot have both
+#: row/column security and online materialized views" -- because the replica would
+#: sit outside the policy. See evidence/02_unity_catalog.md and evidence/05_lakebase.md.
 SYNCED_TABLES: Final[dict[str, str]] = {
     "stockout_risk_current": FCT_STOCKOUT_RISK,
     "forecast_next_13w": FCT_DEMAND_FORECAST,
-    "product_lookup": fq("gold", "svc_product_lookup"),
-    "fill_rate_summary": fq("gold", "svc_fill_rate_summary"),
 }
 
 #: Primary keys used when creating each synced table.
 SYNCED_TABLE_KEYS: Final[dict[str, tuple[str, ...]]] = {
     "stockout_risk_current": ("sku_id", "retailer_code"),
     "forecast_next_13w": ("sku_id", "retailer_code", "week_end_date"),
-    "product_lookup": ("sku_id",),
-    "fill_rate_summary": ("retailer_code", "week_end_date"),
 }
 
 #: Native OLTP tables the app writes to (not mirrors of Delta tables).

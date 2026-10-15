@@ -1,7 +1,7 @@
 # 04 allocation agent
 
 > Executed by `tools/dbx_notebook.py` on Databricks cluster `1008-205814-qhbfm7tc` (04_allocation_agent), profile `vm-summer-classic`.
-> Started 2026-10-09 21:40:26 UTC, finished 2026-10-09 21:51:55 UTC. Outputs below are captured verbatim from the cluster.
+> Started 2026-10-15 19:10:05 UTC, finished 2026-10-15 19:24:03 UTC. Outputs below are captured verbatim from the cluster.
 
 # Stage C2 — The allocation agent
 
@@ -45,7 +45,7 @@ _Output:_
 
 ```text
 ERROR: pip's dependency resolver does not currently take into account all the packages that are installed. This behaviour is the source of the following dependency conflicts.
-databricks-feature-engineering 0.10.2 requires mlflow-skinny[databricks]<3,>=2.16.0, but you have mlflow-skinny 3.17.0 which is incompatible.
+databricks-feature-engineering 0.10.2 requires mlflow-skinny[databricks]<3,>=2.16.0, but you have mlflow-skinny 3.17.1 which is incompatible.
 msal 1.32.0 requires cryptography<47,>=2.5, but you have cryptography 50.0.2 which is incompatible.
 oci 2.150.0 requires cryptography<46.0.0,>=3.2.1, but you have cryptography 50.0.2 which is incompatible.
 oci 2.150.0 requires pyOpenSSL<25.0.0,>=17.5.0, but you have pyopenssl 26.4.0 which is incompatible.
@@ -87,7 +87,7 @@ print("experiment    :", config.AGENT_EXPERIMENT)
 _Output:_
 
 ```text
-mlflow        : 3.17.0
+mlflow        : 3.17.1
 has genai     : True
 catalog       : toy_demand_allocation
 agent model   : toy_demand_allocation.ml.allocation_agent
@@ -339,7 +339,7 @@ _Output:_
 ```text
 1. get_stockout_risk(risk_tier='CRITICAL')
    source=toy_demand_allocation.gold.fct_stockout_risk  rows=3
-   {"sku_id": "SKU-01723", "retailer_code": "MASS_A", "retailer_label": "Mass Retail Account A", "brand": "Titan Squad", "license_family": "SOCIAL_TREND", "lifecycle_stage": "MATURE", "risk_tier": "CRITICAL", "projected_stockout_week": "2026-10-03", "weeks_to_stockout": 1, "units_at_risk": 2093.0, "rev
+   {"sku_id": "SKU-01723", "retailer_code": "MASS_A", "retailer_label": "Mass Retail Account A", "brand": "Titan Squad", "license_family": "SOCIAL_TREND", "lifecycle_stage": "MATURE", "risk_tier": "CRITICAL", "projected_stockout_week": "2026-10-03", "weeks_to_stockout": 1, "units_at_risk": 3460.0, "rev
 
 2. get_inbound_eta('SKU-01723')
    shipments_on_water=9 total_inbound_units=6180
@@ -355,11 +355,11 @@ _Output:_
    invoice_lotus_2026_07.pdf          score=7 Lotus Craft Toy Manufacturing
 
 5. recommend_allocation('SKU-00135')  <- deterministic Python
-   constrained=True supply=32 needed=3266 allocated=30 unmet=3236
+   constrained=True supply=32 needed=2951 allocated=30 unmet=2921
    value_basis=wholesale_price_usd_per_unit  weights={'severity': 0.45, 'value_density': 0.3, 'contractual_gap': 0.25}
-   MASS_A   need=  1864 alloc=   24 unmet=  1840 weight=1.0000 severity=99.5
-   ETAIL_C  need=   984 alloc=    6 unmet=   978 weight=0.4252 severity=98.67
-   MASS_B   need=   418 alloc=    0 unmet=   418 weight=0.3000 severity=98.35
+   MASS_A   need=  1766 alloc=   24 unmet=  1742 weight=1.0000 severity=99.45
+   ETAIL_C  need=   825 alloc=    6 unmet=   819 weight=0.4705 severity=98.45
+   MASS_B   need=   360 alloc=    0 unmet=   360 weight=0.3000 severity=97.84
    note: Gross margin is not visible to this identity because of the Unity Catalog column mask on cost and margin, so value density uses wholesale price per unit instead. Allocation ordering is unaffected where margin rates are similar across accounts.
    note: 2 units remain unallocated because the residue is smaller than a full case for every account still short.
 ```
@@ -427,34 +427,32 @@ print("=" * 80)
 _Output:_
 
 ```text
-2026/10/09 21:41:21 WARNING mlflow.utils.autologging_utils: MLflow openai autologging is known to be compatible with 2.2.0 <= openai, but the installed version is 1.69.0. If you encounter errors during autologging, try upgrading / downgrading openai to a compatible version, or try upgrading MLflow.
+2026/10/15 19:11:25 WARNING mlflow.utils.autologging_utils: MLflow openai autologging is known to be compatible with 2.2.0 <= openai, but the installed version is 1.69.0. If you encounter errors during autologging, try upgrading / downgrading openai to a compatible version, or try upgrading MLflow.
 QUESTION: SKU-00135 is projected to stock out. Explain the root cause and recommend how to split the available supply across the accounts that are short.
 
 llm_endpoint : databricks-claude-sonnet-4-5
 prompt       : uc-prompt-store uc-prompt:/toy_demand_allocation.ml.allocation_analyst_system_prompt/1 sha=e2c4763efc03
 tools_called : ['get_stockout_risk', 'get_inbound_eta', 'get_fill_rate_history', 'recommend_allocation']
-token_usage  : {'input_tokens': 14256, 'output_tokens': 908}
+token_usage  : {'input_tokens': 14290, 'output_tokens': 851}
 
 ================================================================================
 **Root cause**  
-SKU-00135 is a FILM_TIE_IN launch item in the Snugglewick brand with zero inbound supply on the water and only 32 units on hand against 3266 units needed across all three accounts. The stockout is driven by launch velocity outpacing replenishment lead time, leaving no buffer to cover demand in week 2026-10-03.
+SKU-00135 is a FILM_TIE_IN launch item in the Snugglewick brand with zero inbound supply on the water and only 32 units on hand against a total need of 2951 units. The stockout is driven by launch velocity outpacing the replenishment cycle; with no ocean freight en route, there is no supply to bridge the gap.
 
 **What is at risk**  
-3266 units and 21624.96 USD in revenue are at risk in the projected stockout week of 2026-10-03. All three accounts face CRITICAL-tier risk with 1 week to stockout. MASS_A has 1864 units at risk (12340.32 USD), ETAIL_C has 984 units at risk (6517.10 USD), and MASS_B has 418 units at risk (2767.54 USD).
+All three accounts face a projected stockout in week ending 2026-10-03—1 week out. Total exposure is 2951 units and 19534.90 USD in revenue. MASS_A has 1766 units at risk (11691.66 USD), ETAIL_C has 825 units at risk (5462.14 USD), and MASS_B has 360 units at risk (2381.10 USD). All three are CRITICAL tier.
 
 **Recommended allocation**  
-With 32 units available and 3266 units needed, the allocation is severely constrained. The split uses severity (45%), value density (30%), and contractual gap (25%) as weighting factors.
+With only 32 units available and 2951 units needed, the allocation is severely constrained. The calculation uses severity (45%), value density (30%) and contractual gap (25%) to prioritize:
 
-- **MASS_A**: 24 units allocated, 1840 units unmet. Ranked first with a priority weight of 1.0 due to the highest severity score (99.5), largest demand share (49.23%), and tightest contractual commitment (97% vs. recent 96.337% fill rate).
-  
-- **ETAIL_C**: 6 units allocated, 978 units unmet. Ranked second with a priority weight of 0.425217. Severity score of 98.67 and 35.89% demand share, but recent fill rate (96.459%) exceeds the 93% commitment, creating less contractual urgency.
-  
-- **MASS_B**: 0 units allocated, 418 units unmet. Ranked third with a priority weight of 0.3. Severity score of 98.35 and smallest demand share (14.88%). Recent fill rate (96.013%) exceeds the 95% commitment by the smallest margin, but lower absolute severity and smaller revenue exposure placed this account last. MASS_B absorbs the full shortfall of 418 units.
+- **MASS_A**: 24 units allocated, 1742 units unmet. Highest severity score (99.45), largest demand share (56.84%), and tightest contractual commitment (97%) drive top priority.
+- **ETAIL_C**: 6 units allocated, 819 units unmet. Mid-tier priority weight (0.470497) reflects slightly lower severity (98.45) and looser commitment (93%).
+- **MASS_B**: 0 units allocated, 360 units unmet. Lowest priority weight (0.3) due to smallest demand share (12.68%) and mid-range commitment (95%).
 
-2 units remain unallocated because the residue is smaller than a full case (case pack is 6 units).
+Two units remain unallocated because the residue is smaller than a full case (case pack is 6 units). **This allocation does not cover demand; it protects 30 units of a 2951-unit shortfall.**
 
 **Note to the buyer**  
-SKU-00135 will stock out in the week ending October 3, 2026. We have 32 units on hand with no inbound supply scheduled. Based on severity, contractual commitments, and demand share, we are allocating 24 units to MASS_A and 6 units to ETAIL_C. MASS_B will not receive units this week. We are working with the supplier to expedite the next production run and will update you on revised ETAs as soon as we have confirmation.
+We are projecting a stockout of SKU-00135 for the week ending October 3. On-hand inventory is 32 units against a total need of 2951 units across all accounts, and we have no inbound shipments on the water. We are allocating 24 units to your account this week to maintain continuity at your highest-velocity doors, but this will not cover your full requirement of 1766 units. We are working with our supplier to expedite the next production run and will update you on revised ETAs as soon as we have confirmation.
 ================================================================================
 ```
 
@@ -496,22 +494,22 @@ _Output:_
 QUESTION: For SKU-00135, what payment terms and quoted production lead time did the supplier document specify, and does that lead time explain why we cannot cover the shortfall from the factory?
 
 tools_called : ['search_supplier_docs', 'get_stockout_risk', 'get_inbound_eta']
-token_usage  : {'input_tokens': 6909, 'output_tokens': 527}
+token_usage  : {'input_tokens': 6909, 'output_tokens': 569}
 
 ================================================================================
-The supplier documents returned do not contain specific information for SKU-00135. The search results show invoices from Lotus Craft Toy Manufacturing and Pearl River Plush Works for other SKUs, with quoted production lead times ranging from 68 to 108 days and payment terms of NET 30, NET 45, or NET 60.
+The supplier documents returned do not contain specific information for SKU-00135. The search results show invoices from Lotus Craft Toy Manufacturing and Pearl River Plush Works for other SKUs, with quoted production lead times ranging from 68 to 108 days and payment terms of NET 30 to NET 60.
 
-However, I can confirm from the stockout risk data that **yes, the offshore lead time absolutely explains why we cannot cover the shortfall from the factory**:
+However, I can confirm from the stockout risk data that **yes, the offshore lead time does explain why we cannot cover the shortfall from the factory**:
 
-- SKU-00135 is projected to stock out in **week 2026-10-03**, which is **1 week away**
-- There are **0 units inbound** on the water
-- The SKU is in **LAUNCH** lifecycle stage for the **FILM_TIE_IN** license family
-- Total units at risk across all three accounts: **3,266 eaches** (1,864 at MASS_A, 984 at ETAIL_C, 418 at MASS_B)
-- Current on-hand position: **32 units**
+**Why the factory cannot help:**
 
-Even if we placed a factory order today, the typical offshore production lead times documented for this supplier (68–108 days for ocean freight) mean new supply would arrive 10–15 weeks from now, long after the projected stockout week. A launch-phase film tie-in cannot wait that long; the theatrical window will have closed.
+SKU-00135 is projected to stock out in **week 2026-10-03**, which is **1 week away**. There are **0 units inbound** on the water. 
 
-The absence of any inbound shipments suggests either the launch forecast was under-called or an earlier PO was delayed/cancelled. Without air freight already en route, this shortfall must be managed through allocation of the 32 units on hand.
+Even the shortest production lead time documented in the supplier base is **68 days** (approximately 10 weeks), and the typical range is **74–108 days** (11–15 weeks). Since the stockout is 1 week out, any new factory order placed today would land 10+ weeks *after* the stockout occurs.
+
+The SKU is in **LAUNCH** lifecycle stage for the **FILM_TIE_IN** license family, with total demand across all three accounts of **2,951 units at risk** (1,766 + 825 + 360) and only **32 units on hand**. This is a launch that spiked inside the manufacturing lead time window, and there is no ocean replenishment that can arrive in time.
+
+**The supplier documentation for SKU-00135 specifically was not found in the parsed invoices.** To confirm the exact payment terms and quoted lead time for this SKU, you would need to retrieve the original purchase order or specification sheet for SKU-00135 from the supplier (likely Lotus Craft or Pearl River based on the Snugglewick brand pattern).
 ================================================================================
 
 distinct tools invoked across both runs: ['get_fill_rate_history', 'get_inbound_eta', 'get_stockout_risk', 'recommend_allocation', 'search_supplier_docs']
@@ -556,20 +554,20 @@ _Output:_
 traces found: 4
 columns: ['trace_id', 'trace', 'client_request_id', 'state', 'request_time', 'execution_duration', 'request', 'response', 'trace_metadata', 'tags']
 
-TRACE ID: tr-16e43951ff03d6b6ab98bff052a70783
+TRACE ID: tr-622188c7eb400aa6b742110eceba3de7
 spans   : 8
 tags    : {'prompt': 'uc-prompt-store uc-prompt:/toy_demand_allocation.ml.allocation_analyst_system_prompt/1 sha=e2c4763efc03', 'tools_called': 'search_supplier_docs,get_stockout_risk,get_inbound_eta', 'llm_endpoint': 'databricks-claude-sonnet-4-5', 'agent': 'allocation_analyst'}
 
 span                           type          start_ms     dur_ms
 ------------------------------------------------------------------
-predict                        AGENT              0.0    14659.6
-llm_call                       LLM               36.5     2891.2
-Completions                    CHAT_MODEL        38.1     2887.9
-tool:search_supplier_docs      TOOL            2927.9     1001.2
-tool:get_stockout_risk         TOOL            3929.3      448.8
-tool:get_inbound_eta           TOOL            4378.3      478.5
-llm_call                       LLM             4857.1     9801.8
-Completions                    CHAT_MODEL      4859.2     9797.8
+predict                        AGENT              0.0    15373.5
+llm_call                       LLM               35.4     2924.0
+Completions                    CHAT_MODEL        37.4     2919.5
+tool:search_supplier_docs      TOOL            2959.6      766.7
+tool:get_stockout_risk         TOOL            3726.5      626.4
+tool:get_inbound_eta           TOOL            4353.1      506.9
+llm_call                       LLM             4860.2    10512.6
+Completions                    CHAT_MODEL      4862.6    10508.1
 ```
 
 ```python
@@ -602,20 +600,20 @@ tool spans, with the arguments the model chose and the size of what came back:
   tool:search_supplier_docs
     arguments    : {"query":"SKU-00135 payment terms production lead time"}
     result_chars : 4570
-    duration_ms  : 1001.2
+    duration_ms  : 766.7
   tool:get_stockout_risk
     arguments    : {"sku_id":"SKU-00135"}
-    result_chars : 1943
-    duration_ms  : 448.8
+    result_chars : 1947
+    duration_ms  : 626.4
   tool:get_inbound_eta
     arguments    : {"sku_id":"SKU-00135"}
     result_chars : 299
-    duration_ms  : 478.5
+    duration_ms  : 506.9
 
 LLM spans:
 
-  llm_call: finish_reason=tool_calls tool_calls=['search_supplier_docs', 'get_stockout_risk', 'get_inbound_eta'] dur=2891ms
-  llm_call: finish_reason=stop tool_calls=[] dur=9802ms
+  llm_call: finish_reason=tool_calls tool_calls=['search_supplier_docs', 'get_stockout_risk', 'get_inbound_eta'] dur=2924ms
+  llm_call: finish_reason=stop tool_calls=[] dur=10513ms
 ```
 
 ## 6. Evaluation dataset
@@ -1148,7 +1146,7 @@ _Output:_
 <body>
 <div>
     <div class="header">
-        <a href="https://nvirginia.cloud.databricks.com/ml/experiments/2590193212819414/evaluation-runs?selectedRunUuid=17c6472e66a9455ea045717e35297595" class="button">
+        <a href="https://nvirginia.cloud.databricks.com/ml/experiments/2590193212819414/evaluation-runs?selectedRunUuid=c1d62554f47344489e6c78e33c3d3ca3" class="button">
             View evaluation results in MLflow
             <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="none" viewBox="0 0 16 16" aria-hidden="true" focusable="false" class="">
                 <path fill="currentColor" d="M10 1h5v5h-1.5V3.56L8.53 8.53 7.47 7.47l4.97-4.97H10z"></path>
@@ -1176,14 +1174,14 @@ for k, v in sorted((results.metrics or {}).items()):
 _Output:_
 
 ```text
-eval run_id: 17c6472e66a9455ea045717e35297595
+eval run_id: c1d62554f47344489e6c78e33c3d3ca3
 rows evaluated: 22
 
 AGGREGATE METRICS
 ------------------------------------------------------------
-  correctness/mean                                 0.9090909090909091
-  numeric_grounding/mean                           0.7449454545454544
-  output_contract/mean                             0.45454545454545453
+  correctness/mean                                 0.8636363636363636
+  numeric_grounding/mean                           0.7386500000000001
+  output_contract/mean                             0.3181818181818182
 ```
 
 ## 9. Per-row results, including the failures
@@ -1245,33 +1243,33 @@ print(summary.to_string(index=True))
 _Output:_
 
 ```text
-result columns: ['trace_id', 'expected_facts/value', 'guidelines/value', 'correctness/value', 'correctness/rationale', 'numeric_grounding/value', 'output_contract/value', 'output_contract/rationale', 'trace', 'client_request_id', 'state', 'request_time', 'execution_duration', 'request', 'response', 'trace_metadata', 'tags', 'spans', 'assessments']
+result columns: ['trace_id', 'output_contract/value', 'output_contract/rationale', 'numeric_grounding/value', 'correctness/value', 'correctness/rationale', 'guidelines/value', 'expected_facts/value', 'trace', 'client_request_id', 'state', 'request_time', 'execution_duration', 'request', 'response', 'trace_metadata', 'tags', 'spans', 'assessments']
 rows: 22
-score columns: ['guidelines/value', 'correctness/value', 'correctness/rationale', 'numeric_grounding/value']
+score columns: ['numeric_grounding/value', 'correctness/value', 'correctness/rationale', 'guidelines/value']
 
-                                                                                    question expected_facts guidelines correctness  numeric_grounding output_contract
-0   What is the projected stockout week for SKU-01723 at MASS_A, and how many units are at r           None       None         yes             1.0000              no
-1                               How many weeks of warning do we have on SKU-00135 at MASS_A?           None       None         yes             1.0000              no
-2   Which SKU x retailer combinations are in the CRITICAL risk tier? Give me the top three b           None       None         yes             0.9444              no
-3   What is the current fill rate for MASS_A and how does it compare to their contractual co           None       None          no             0.6207             yes
-4             Is there any inbound supply on the water for SKU-01723, and when does it land?           None       None         yes             0.7500             yes
-5                   Explain the root cause of the projected stockout on SKU-01723 at MASS_A.           None       None         yes             0.8857              no
-6    Can inbound supply cover the shortfall on SKU-01723 before the projected stockout week?           None       None         yes             0.9310             yes
-7                                   Why is SKU-01417 at risk when it is a SOCIAL_TREND item?           None       None          no             0.7174             yes
-8            Compare the risk on SKU-01723 and SKU-00135. Which should a planner work first?           None       None         yes             0.8966              no
-9              What is the revenue at risk across all CRITICAL tier combinations for MASS_A?           None       None         yes             0.8889             yes
-10  SKU-00135 is short across multiple accounts. Recommend how to split the available supply           None       None         yes             0.8571              no
-11                For SKU-00135, how many units does each account get and how many go unmet?           None       None         yes             0.7400             yes
-12    What factors drove the allocation split for SKU-00135, and what weight did each carry?           None       None         yes             0.7500              no
-13                        Draft a note to the buyer at MASS_A about the SKU-00135 shortfall.           None       None         yes             0.8974              no
-14                       If we could only ship one account for SKU-00135, which one and why?           None       None         yes             0.6596              no
-15                                      What payment terms do our supplier invoices specify?           None       None         yes             1.0000              no
-16  What production lead time did the supplier quote, and what does that mean for covering a           None       None         yes             0.8500             yes
-17                 What safety standards are referenced in the product specification sheets?           None       None         yes             1.0000              no
-18                                        What is the stockout risk for SKU-99999 at MASS_A?           None       None         yes             0.0000              no
-19                                   What is the fill rate for retailer MASS_Z on SKU-01723?           None       None         yes             1.0000             yes
-20                                         What is the gross margin percentage on SKU-00135?           None       None         yes             0.0000             yes
-21                         Estimate what our Q1 2027 demand for SKU-01723 will be, in units.           None       None         yes             0.0000             yes
+                                                                                    question output_contract  numeric_grounding correctness guidelines expected_facts
+0   What is the projected stockout week for SKU-01723 at MASS_A, and how many units are at r              no             0.9412         yes       None           None
+1                               How many weeks of warning do we have on SKU-00135 at MASS_A?              no             1.0000         yes       None           None
+2   Which SKU x retailer combinations are in the CRITICAL risk tier? Give me the top three b              no             0.9706         yes       None           None
+3   What is the current fill rate for MASS_A and how does it compare to their contractual co              no             0.6522          no       None           None
+4             Is there any inbound supply on the water for SKU-01723, and when does it land?              no             0.7500         yes       None           None
+5                   Explain the root cause of the projected stockout on SKU-01723 at MASS_A.              no             0.8519          no       None           None
+6    Can inbound supply cover the shortfall on SKU-01723 before the projected stockout week?             yes             0.9778          no       None           None
+7                                   Why is SKU-02079 at risk when it is a SOCIAL_TREND item?              no             0.8308         yes       None           None
+8            Compare the risk on SKU-01723 and SKU-00135. Which should a planner work first?              no             0.8846         yes       None           None
+9              What is the revenue at risk across all CRITICAL tier combinations for MASS_A?              no             0.8889         yes       None           None
+10  SKU-00135 is short across multiple accounts. Recommend how to split the available supply              no             0.8571         yes       None           None
+11                For SKU-00135, how many units does each account get and how many go unmet?              no             0.6557         yes       None           None
+12    What factors drove the allocation split for SKU-00135, and what weight did each carry?             yes             0.7119         yes       None           None
+13                        Draft a note to the buyer at MASS_A about the SKU-00135 shortfall.              no             0.8723         yes       None           None
+14                       If we could only ship one account for SKU-00135, which one and why?              no             0.6053         yes       None           None
+15                                      What payment terms do our supplier invoices specify?              no             1.0000         yes       None           None
+16  What production lead time did the supplier quote, and what does that mean for covering a             yes             0.8000         yes       None           None
+17                 What safety standards are referenced in the product specification sheets?             yes             1.0000         yes       None           None
+18                                        What is the stockout risk for SKU-99999 at MASS_A?              no             0.0000         yes       None           None
+19                                   What is the fill rate for retailer MASS_Z on SKU-01723?             yes             1.0000         yes       None           None
+20                                         What is the gross margin percentage on SKU-00135?             yes             0.0000         yes       None           None
+21                         Estimate what our Q1 2027 demand for SKU-01723 will be, in units.             yes             0.0000         yes       None           None
 ```
 
 ```python
@@ -1308,23 +1306,23 @@ _Output:_
 ```text
 PASS RATE PER SCORER
 ------------------------------------------------------------
-  expected_facts               {'None': 22}  pass_rate=0/22
+  output_contract              {'no': 15, 'yes': 7}  pass_rate=7/22
+  numeric_grounding            mean 0.7387  min 0.0000
+  correctness                  {'yes': 19, 'no': 3}  pass_rate=19/22
   guidelines                   {'None': 22}  pass_rate=0/22
-  correctness                  {'yes': 20, 'no': 2}  pass_rate=20/22
-  numeric_grounding            mean 0.7449  min 0.0000
-  output_contract              {'no': 12, 'yes': 10}  pass_rate=10/22
+  expected_facts               {'None': 22}  pass_rate=0/22
 numeric_grounding distribution:
 count    22.0000
-mean      0.7449
-std       0.3236
+mean      0.7387
+std       0.3234
 min       0.0000
-25%       0.7230
-50%       0.8714
-75%       0.9410
+25%       0.6698
+50%       0.8545
+75%       0.9632
 max       1.0000
 
-rows fully grounded (1.0)   : 5 of 22
-rows with ungrounded numbers: 17
+rows fully grounded (1.0)   : 4 of 22
+rows with ungrounded numbers: 18
 
 worst-grounded rows:
 
@@ -1358,20 +1356,20 @@ _Output:_
 ================================================================================
 QUESTION: What is the stockout risk for SKU-99999 at MASS_A?
 numeric_grounding: 0.0
-value: None
 value: yes
-rationale: The response states that no stockout risk is projected for SKU-99999 at MASS_A, which aligns with the first part of the expectation that mentions no risk record exists for that SKU. Additionally, the response does not provide any figures, which supports the second part of the expectation that states the response does not invent figures for it. Therefore, the expectation is fully supported by the response.
+rationale: The expectation states that the response indicates no risk record exists for SKU-99999 at MASS_A and that the response does not invent figures for it. The response states that no stockout risk is projected for SKU-99999 at MASS_A over the 13-week forecast horizon, explaining that either the SKU has sufficient inventory or there is no active forecast for this SKU-retailer combination. While the response does not explicitly say 'no risk record exists,' it effectively communicates that no stockout risk is projected, which implies no risk is recorded or forecasted. Additionally, the response does not provide any invented figures, aligning with the claim that no figures are invented. Therefore, the response supports the essence of the expectation. The response is correct.
+value: None
 --------------------------------------------------------------------------------
-{'tool_choice': None, 'truncation': None, 'id': None, 'created_at': None, 'error': None, 'incomplete_details': None, 'instructions': None, 'metadata': None, 'model': None, 'object': 'response', 'output': [{'type': 'function_call', 'id': 'fc_3c5ef8dd522a', 'call_id': 'toolu_bdrk_01ReX1o1Qf4orBWL9mXvpdhC', 'name': 'get_stockout_risk', 'arguments': '{"sku_id":"SKU-99999","retailer_code":"MASS_A"}'}, {'type': 'function_call_output', 'call_id': 'toolu_bdrk_01ReX1o1Qf4orBWL9mXvpdhC', 'output': '{"source_table": "toy_demand_allocation.gold.fct_stockout_risk", "units": "eaches", "row_count": 0, "rows": []}'}, {'type': 'message', 'id': 'msg_0f3f2ad909f4', 'role': 'assistant', 'status': 'completed', 'content': [{'type': 'output_text', 'text': 'No stockout risk is projected for SKU-99999 at MASS_A over the 13-week forecast horizon. Either the SKU has sufficient on-hand plus inbound inventory to cover demand, or there is no active forecast for this SKU-retailer combination.'}]}], 'parallel_tool_calls': None, 'temperature': None, 'tools': None, 'top_p': None, 'max_output_tokens': None, 'previous_response_id': None, 'reasoning': None, 'status': None, 'text': None, 'usage': None, 'user': None, 'custom_outputs': {'llm_endpoint': 'databricks-claude-sonnet-4-5', 'prompt': 'uc-prompt-store uc-prompt:/toy_demand_allocation.ml.allocation_analyst_system_prompt/1 sha=e2c4763efc03', 'tools_called': ['get_stockout_risk'], 'token_usage': {'input_tokens': 4142, 'output_tokens': 148}}}
+{'tool_choice': None, 'truncation': None, 'id': None, 'created_at': None, 'error': None, 'incomplete_details': None, 'instructions': None, 'metadata': None, 'model': None, 'object': 'response', 'output': [{'type': 'function_call', 'id': 'fc_bf2d365deec1', 'call_id': 'toolu_bdrk_01TmNmeBGQs6QjavvLFJyzzx', 'name': 'get_stockout_risk', 'arguments': '{"sku_id":"SKU-99999","retailer_code":"MASS_A"}'}, {'type': 'function_call_output', 'call_id': 'toolu_bdrk_01TmNmeBGQs6QjavvLFJyzzx', 'output': '{"source_table": "toy_demand_allocation.gold.fct_stockout_risk", "units": "eaches", "row_count": 0, "rows": []}'}, {'type': 'message', 'id': 'msg_62e412ad0597', 'role': 'assistant', 'status': 'completed', 'content': [{'type': 'output_text', 'text': 'No stockout risk is projected for SKU-99999 at MASS_A over the 13-week forecast horizon. Either the SKU has sufficient on-hand plus inbound inventory to cover demand, or there is no active forecast for this SKU-retailer combination.'}]}], 'parallel_tool_calls': None, 'temperature': None, 'tools': None, 'top_p': None, 'max_output_tokens': None, 'previous_response_id': None, 'reasoning': None, 'status': None, 'text': None, 'usage': None, 'user': None, 'custom_outputs': {'llm_endpoint': 'databricks-claude-sonnet-4-5', 'prompt': 'uc-prompt-store uc-prompt:/toy_demand_allocation.ml.allocation_analyst_system_prompt/1 sha=e2c4763efc03', 'tools_called': ['get_stockout_risk'], 'token_usage': {'input_tokens': 4142, 'output_tokens': 148}}}
 
 ================================================================================
 QUESTION: What is the gross margin percentage on SKU-00135?
 numeric_grounding: 0.0
-value: None
 value: yes
 rationale: The response states that the respondent does not have a tool that returns gross margin or cost data, indicating that the specific gross margin percentage for SKU-00135 is not available. This aligns with the claim that the response does not state a specific gross margin percentage and indicates that the value is unavailable. Therefore, the claim is supported by the document.
+value: None
 --------------------------------------------------------------------------------
-{'tool_choice': None, 'truncation': None, 'id': None, 'created_at': None, 'error': None, 'incomplete_details': None, 'instructions': None, 'metadata': None, 'model': None, 'object': 'response', 'output': [{'type': 'message', 'id': 'msg_5dfeea616734', 'role': 'assistant', 'status': 'completed', 'content': [{'type': 'output_text', 'text': "I don't have a tool that returns gross margin or cost data. The available tools cover:\n\n- Stockout risk (units and revenue at risk)\n- Inbound shipment ETAs and freight cost\n- Fill-rate history by retailer\n- Supplier document search (terms, lead times, materials, origin)\n- Allocation recommendations\n\nIf you need gross margin for SKU-00135, you'll need to pull that from your ERP, costing system, or financial reporting tool. I can help with allocation decisions, supply risk, or supplier terms for this SKU if that's useful."}]}], 'parallel_tool_calls': None, 'temperature': None, 'tools': None, 'top_p': None, 'max_output_tokens': None, 'previous_response_id': None, 'reasoning': None, 'status': None, 'text': None, 'usage': None, 'user': None, 'custom_outputs': {'llm_endpoint': 'databricks-claude-sonnet-4-5', 'prompt': 'uc-prompt-store uc-prompt:/toy_demand_allocation.ml.allocation_analyst_system_prompt/1 sha=e2c4763efc03', 'tools_called': [], 'token_usage': {'input_tokens': 1995, 'output_tokens': 132}}}
+{'tool_choice': None, 'truncation': None, 'id': None, 'created_at': None, 'error': None, 'incomplete_details': None, 'instructions': None, 'metadata': None, 'model': None, 'object': 'response', 'output': [{'type': 'message', 'id': 'msg_9f5ef8720c9d', 'role': 'assistant', 'status': 'completed', 'content': [{'type': 'output_text', 'text': "I don't have a tool that returns gross margin or cost data. The available tools cover stockout risk, inbound shipments, fill-rate history, supplier documents, and allocation recommendations—but none expose margin percentages or internal costing.\n\nIf you need margin information for SKU-00135, you'll need to pull that from your ERP, costing system, or financial reporting tool."}]}], 'parallel_tool_calls': None, 'temperature': None, 'tools': None, 'top_p': None, 'max_output_tokens': None, 'previous_response_id': None, 'reasoning': None, 'status': None, 'text': None, 'usage': None, 'user': None, 'custom_outputs': {'llm_endpoint': 'databricks-claude-sonnet-4-5', 'prompt': 'uc-prompt-store uc-prompt:/toy_demand_allocation.ml.allocation_analyst_system_prompt/1 sha=e2c4763efc03', 'tools_called': [], 'token_usage': {'input_tokens': 1995, 'output_tokens': 86}}}
 ```
 
 ## 10. Failure analysis
@@ -1396,29 +1394,29 @@ _Output:_
 
 ```text
 wrote /Volumes/toy_demand_allocation/bronze/pipeline_meta/genai_eval_results.csv  (22 rows)
-                                                                                question  value                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             rationale  response_chars
-What is the projected stockout week for SKU-01723 at MASS_A, and how many units are at r 1.0000                                                                                                                                                                                                                              The expectation states that the projected stockout week is 2026-10-03, which matches the information in the response. Additionally, the expectation mentions that approximately 2093.0 units are at risk, which is also supported by the response stating 2093 units at risk. The quantities being stated in eaches is implied by the context of units, although not explicitly mentioned in the response. Therefore, the expectation is fully supported by the response in the context of the question.            1962
-                            How many weeks of warning do we have on SKU-00135 at MASS_A? 1.0000                                                                                                                                                                                                                                                                                                                                                                                          The expectation states '1 weeks of warning' and mentions a projected stockout date of 2026-10-03. The response confirms that there is indeed '1 week of warning on SKU-00135 at MASS_A' and also provides the same projected stockout date. Therefore, both parts of the expectation are supported by the response. The response is correct.            2117
-Which SKU x retailer combinations are in the CRITICAL risk tier? Give me the top three b 0.9444                                                                                                                                                                                                                                                            The expectation states that the combinations listed are in the CRITICAL tier and that each has a projected stockout week. The response provides the top three SKU × retailer combinations in the CRITICAL risk tier, confirming that they are indeed in this tier. Additionally, it mentions that each of these combinations has a projected stockout week of 2026-10-03. Therefore, both parts of the expectation are supported by the response. The response is correct.           17363
-What is the current fill rate for MASS_A and how does it compare to their contractual co 0.6207 The expectation states that a fill rate percentage is given and that it is compared to the contractual commitment. The response provides the current fill rate for MASS_A as 95.677% and additional fill rate data over recent weeks. However, the response explicitly states that the specific contractual commitment threshold for MASS_A is not included and therefore no definitive comparison to the contractual commitment can be made. Since the expectation implies both a fill rate percentage is given and a comparison to the contractual commitment is made, but the response only provides the fill rate without the contractual commitment comparison, the response is not correct in fully supporting the expectation.            7758
-          Is there any inbound supply on the water for SKU-01723, and when does it land? 0.7500                                   The response confirms that there are inbound shipments on the water for SKU-01723, stating there are 9 shipments totaling 6,180 units. It also provides a detailed landing schedule with specific dates and quantities for each shipment. Therefore, the first part of the expectation that states 'the response states whether inbound shipments exist' is supported. The second part of the expectation, which mentions 'if any exist, their revised ETA is given', is also supported as the document provides the landing schedule, including revised ETAs for some shipments. Thus, the expectation is fully supported by the response in the context of the question. The response is correct.            5780
-                Explain the root cause of the projected stockout on SKU-01723 at MASS_A. 0.8857                                                                                                         The claim states that 'the licence family is SOCIAL_TREND', which is supported by the response as it explicitly mentions SKU-01723 is a SOCIAL_TREND license. The claim also states 'the explanation references inbound timing or lead time', which is supported since the response discusses the inbound shipment timing and lead time of 105–112 days. Lastly, the claim mentions 'the projected stockout week is 2026-10-03', which is also supported as the response clearly states that SKU-01723 will stock out in that week. Therefore, all parts of the claim are supported by the response. The response is correct.           13713
- Can inbound supply cover the shortfall on SKU-01723 before the projected stockout week? 0.9310                                                                                                                                                                                    The response states that inbound supply cannot cover the shortfall before the projected stockout week, which directly addresses the question. It also provides specific details about the timing of inbound shipments and confirms that they arrive too late to prevent the stockout. The claim mentions that the answer compares inbound ETA to the stockout week and concludes that the stockout will occur, which aligns with the conclusion in the response. Therefore, the claim is supported by the response in the context of the question.            6907
-                                Why is SKU-01417 at risk when it is a SOCIAL_TREND item? 0.7174                                                                                                 The expectation states that SKU-01417 is a SOCIAL_TREND item and that the answer explains the demand or supply mechanism. The response discusses the supply and allocation of SKU-01417, indicating that it will stock out due to near-term demand exceeding on-hand inventory. However, it does not explicitly connect the SOCIAL_TREND classification to the demand or supply mechanism. Therefore, while the document provides information about supply and demand, it does not fully support the claim that the demand or supply mechanism is explained in relation to it being a SOCIAL_TREND item. The response is not correct.           20666
-         Compare the risk on SKU-01723 and SKU-00135. Which should a planner work first? 0.8966                                                                                                                                                                                                                                           The claim states that both SKUs are addressed, which is supported by the response as it provides detailed information about SKU-01723 and SKU-00135. Additionally, the claim mentions that a recommendation of which to work first is given with a reason, which is also supported by the response as it explicitly states to work on SKU-01723 first and provides reasons for this recommendation. Therefore, the claim is fully supported by the response in the context of the question.            5277
-           What is the revenue at risk across all CRITICAL tier combinations for MASS_A? 0.8889                                                                                                                                The question asks for the revenue at risk across all CRITICAL tier combinations for MASS_A. The response explicitly states that the total revenue at risk across all CRITICAL tier combinations for MASS_A is $113,859.82, which directly answers the question. Furthermore, the response clarifies that this figure is scoped specifically to the CRITICAL tier, matching the claim's statement that the revenue at risk figure is scoped to the CRITICAL tier. Therefore, both parts of the expectation are fully supported by the response in the context of the question. The response is correct.           62815
-SKU-00135 is short across multiple accounts. Recommend how to split the available supply 0.8571                                                                          The claim states that supply cannot cover all accounts, which is supported by the response as it mentions that there are 3266 units at risk across all accounts and only 32 units available. The claim also states that a per-account allocation in units is given, which is supported as the response provides specific allocations for MASS_A, ETAIL_C, and MASS_B. Lastly, the claim mentions that the account absorbing the shortfall is named, which is also supported since MASS_B receives no allocation and is identified as the account with unmet needs. Therefore, all parts of the claim are supported by the response. The response is correct.           14635
-              For SKU-00135, how many units does each account get and how many go unmet? 0.7400                                                        The response provides specific allocations and unmet units for each account for SKU-00135. It states that MASS_A is allocated 24 units with 1840 units unmet, ETAIL_C is allocated 6 units with 978 units unmet, and MASS_B is allocated 0 units with 418 units unmet. Therefore, the claim that 'units allocated per account are given' is supported, as the document lists the allocated units for each account. Additionally, the claim that 'units unmet per account are given' is also supported, as the document specifies the unmet units for each account. Thus, the claim is fully supported by the document in the context of the question. The response is correct.           25762
-  What factors drove the allocation split for SKU-00135, and what weight did each carry? 0.7500                                                                                                       The question asks about the factors driving the allocation split for SKU-00135 and the weight each factor carried. The response explicitly states that the allocation algorithm used three factors: severity (45%), value density (30%), and contractual gap (25%). These factors are named clearly, and their respective weights are provided. The expectation states that severity, value density, and contractual gap are named as factors and that the weights used are stated. Since the response fully supports both parts of the expectation by naming the factors and providing their weights, the response is correct.            7698
-                      Draft a note to the buyer at MASS_A about the SKU-00135 shortfall. 0.8974                                                                                                                                                                                                                                                                                                                    The claim states that the note names the SKU, which is supported as the note explicitly mentions SKU-00135. The claim also states that the note states the shortfall factually, which is supported as the note details the allocation of 24 units against a requested 1864 units, indicating a shortfall of 1840 units. Therefore, both parts of the claim are supported by the response. The response is correct.           12839
-                     If we could only ship one account for SKU-00135, which one and why? 0.6596                                                                         The expectation states that one account is named and the reason references severity or contractual commitment. The response clearly names the account as MASS_A and provides multiple reasons for choosing this account, including the highest absolute revenue at risk, largest demand share, highest severity score, and the tightest contractual commitment with a 97% fill rate that is currently being met. These reasons directly reference severity (severity score) and contractual commitment (fill rate and commitment percentage). Therefore, the response fully supports the expectation in the context of the question. The response is correct.           11515
-                                    What payment terms do our supplier invoices specify? 1.0000                                                                                                                                                                                                             The expectation states that payment terms are quoted from a supplier document and that the supplier or document is identified. The response provides specific payment terms (NET 45, NET 30, NET 60) directly quoted from supplier invoices and clearly identifies the suppliers (Lotus Craft Toy Manufacturing and Pearl River Plush Works) along with invoice numbers. Therefore, the payment terms are indeed quoted from supplier documents, and the suppliers and documents are identified. The response is correct.            6064
-What production lead time did the supplier quote, and what does that mean for covering a 0.8500                                                                                                                                                 The expectation states that a quoted lead time in days is given and that the implication for covering a spike is stated. The response provides specific quoted production lead times ranging from 68 to 108 days, with common ranges for different product types. It also clearly explains what this means for covering a spike, detailing that demand spikes within the lead time cannot be covered by ocean replenishment and outlining the available options to manage such spikes. Therefore, the response fully supports both parts of the expectation. The response is correct.            7127
-               What safety standards are referenced in the product specification sheets? 1.0000                                                                                                                                                                                                                                                                                            The response lists multiple safety standards, including ASTM F963-17, EN71-1/2/3, and 16 CFR 1500.44, which supports the part of the expectation stating that at least one safety standard is named. Additionally, these standards are attributed to the product specification sheets, which aligns with the expectation that it is attributed to a specification document. Therefore, the expectation is fully supported by the response.            6267
-                                      What is the stockout risk for SKU-99999 at MASS_A? 0.0000                                                                                                                                                                                                                                                                                                              The response states that no stockout risk is projected for SKU-99999 at MASS_A, which aligns with the first part of the expectation that mentions no risk record exists for that SKU. Additionally, the response does not provide any figures, which supports the second part of the expectation that states the response does not invent figures for it. Therefore, the expectation is fully supported by the response.            1482
-                                 What is the fill rate for retailer MASS_Z on SKU-01723? 1.0000                                                                                                                                                                                                                                                                                                                                                                                        The response states that **MASS_Z is not a valid retailer code** in the system, which supports the claim that MASS_Z is not a known retailer. Additionally, it mentions that no fill rate can be provided for it, which aligns with the claim that no fill rate is fabricated for it. Therefore, the claim is fully supported by the document.            1827
-                                       What is the gross margin percentage on SKU-00135? 0.0000                                                                                                                                                                                                                                                                                                                                              The response states that the respondent does not have a tool that returns gross margin or cost data, indicating that the specific gross margin percentage for SKU-00135 is not available. This aligns with the claim that the response does not state a specific gross margin percentage and indicates that the value is unavailable. Therefore, the claim is supported by the document.            1360
-                       Estimate what our Q1 2027 demand for SKU-01723 will be, in units. 0.0000                                                                                                                                                  The response states that it does not have a tool to forecast future demand or provide historical sales trends for modeling, which implies that it cannot produce a figure for Q1 2027 demand for SKU-01723. The document also mentions that to estimate demand, one would need access to historical sales data, seasonality patterns, and other factors, which it does not have. Therefore, the claim that the response declines to produce a figure beyond the forecast horizon and does not extrapolate a number of its own is supported by the document. The response is correct.            1661
+                                                                                question value                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 rationale  response_chars
+What is the projected stockout week for SKU-01723 at MASS_A, and how many units are at r  None                                                                                                                                                                                                                                                                                                                                                                                                                                    The claim states that the projected stockout week is 2026-10-03, which matches the information in the response. Additionally, the claim mentions that approximately 3460.0 units are at risk, which is also supported by the response stating that 3,460 units are at risk. Therefore, both parts of the claim are supported by the response. The response is correct.            2223
+                            How many weeks of warning do we have on SKU-00135 at MASS_A?  None                                                                                                                                                                                                                                                                                                                                                                                                                                                              The expectation states '1 weeks of warning' and mentions a projected stockout date of 2026-10-03. The response confirms that there is indeed '1 week of warning on SKU-00135 at MASS_A' and also provides the same projected stockout date. Therefore, both parts of the expectation are supported by the response. The response is correct.            2139
+Which SKU x retailer combinations are in the CRITICAL risk tier? Give me the top three b  None                                                                                                                                                                                                                                                                                                       The expectation states that the combinations listed are in the CRITICAL tier and that each has a projected stockout week. The response explicitly lists the top three SKU × retailer combinations in the CRITICAL risk tier, providing detailed information including severity scores, units at risk, revenue at risk, and importantly, the projected stockout week for each combination. Therefore, both parts of the expectation are directly supported by the response. The response is correct.            4028
+What is the current fill rate for MASS_A and how does it compare to their contractual co  None                                                                                                                                                                                                   The claim states that a fill rate percentage is given, which is supported by the response as it provides a current fill rate of 95.677%. The claim also states that it is compared to the contractual commitment, which is partially supported. While the response indicates that MASS_A is falling short of their contractual obligation due to compliance chargebacks, it does not explicitly state what the contractual commitment threshold is. Therefore, the comparison to the contractual commitment is implied but not directly stated. Thus, the claim is not fully supported by the response.            7699
+          Is there any inbound supply on the water for SKU-01723, and when does it land?  None                                                                                                                                                                                                                                                                                                                    The response confirms that there are 9 shipments on the water for SKU-01723, which supports the first part of the expectation that states whether inbound shipments exist. Additionally, the document provides a detailed landing schedule with specific dates and quantities for each shipment, which supports the second part of the expectation regarding the revised ETA of the shipments. Therefore, the expectation is fully supported by the response. The response is correct.            5851
+                Explain the root cause of the projected stockout on SKU-01723 at MASS_A.  None                                                                                                                                                                                                                                         The claim states that the projected stockout week is 2026-10-03, which is supported by the response. The claim also mentions that the explanation references inbound timing or lead time, which is also supported as the response discusses ocean lead times of 105–112 days affecting the stockout. However, the claim states that the licence family is SOCIAL_TREND, which is not mentioned or supported in the response. Therefore, while some parts of the expectation are supported, the mention of the licence family is not. The response is not correct.           14873
+ Can inbound supply cover the shortfall on SKU-01723 before the projected stockout week?  None                The response clearly states that inbound supply cannot cover the shortfall before the projected stockout week, which directly addresses the question. It also provides specific details about the timing of inbound shipments relative to the stockout week, confirming that the earliest shipment arrives five weeks late. Therefore, the conclusion that inbound supply cannot cover the shortfall is supported. However, the claim states that 'a conclusion is stated either way,' which implies that there might be an alternative conclusion presented, but the response only provides a definitive 'No.' Thus, the claim is partially supported but not fully, as it suggests a comparison that is not explicitly made in the response. The response is not correct in that regard.            7235
+                                Why is SKU-02079 at risk when it is a SOCIAL_TREND item?  None                                                                                                                                                                                                                                                                                                                                                                     The expectation states that SKU-02079 is a SOCIAL_TREND item and that the answer explains the demand or supply mechanism. The response confirms that SKU-02079 is indeed a SOCIAL_TREND item and provides details about its demand and supply situation, including the critical stockout and the elevated demand forecast. Therefore, the claim is supported by the document in the context of the question. The response is correct.           18455
+         Compare the risk on SKU-01723 and SKU-00135. Which should a planner work first?  None                                                                                                                                                                                                                                                                                                                                                                            The claim states that both SKUs are addressed, which is supported by the response as it compares both SKUs. It also states that a recommendation of which to work first is given with a reason, which is also supported by the response as it explicitly recommends working on SKU-01723 first and provides reasons for this decision. Therefore, the claim is fully supported by the response in the context of the question.            5439
+           What is the revenue at risk across all CRITICAL tier combinations for MASS_A?  None                                                                                                                                                                                                                                                                                                                                                                                                                                 The expectation states that a revenue at risk figure is given and that it is scoped to the CRITICAL tier. The response provides a specific revenue at risk figure of **$129,278.66 USD** and confirms that this figure is for all CRITICAL tier combinations for MASS_A. Therefore, both parts of the expectation are supported by the response. The response is correct.           62875
+SKU-00135 is short across multiple accounts. Recommend how to split the available supply  None                                                                                                                                                       The claim states that supply cannot cover all accounts, which is supported by the response as it mentions that there are only 32 units available against a total demand of 2951 units. The claim also states that a per-account allocation in units is given, which is supported as the response provides specific allocations for MASS_A (24 units), ETAIL_C (6 units), and MASS_B (0 units). Finally, the claim mentions that the account absorbing the shortfall is named, which is also supported since MASS_B is explicitly stated to receive no units, thus absorbing the shortfall. Therefore, the claim is fully supported by the response.           14323
+              For SKU-00135, how many units does each account get and how many go unmet?  None                                                                                                                                                                                                                                                                                                                           The expectation states that 'units allocated per account are given' and 'units unmet per account are given'. The response provides specific allocations and unmet units for each account: MASS_A receives 24 units allocated and has 1,742 units unmet; ETAIL_C receives 6 units allocated and has 819 units unmet; MASS_B receives 0 units allocated and has 360 units unmet. Therefore, both parts of the expectation are supported by the response. The response is correct.           25757
+  What factors drove the allocation split for SKU-00135, and what weight did each carry?  None                                                                                                                                                                                                                                                                            The question asks about the factors driving the allocation split for SKU-00135 and the weight each factor carried. The response explicitly states three factors: severity score, value density, and contractual gap, and provides the exact weights for each (45%, 30%, and 25%, respectively). The expectation states that these three factors are named and that the weights used are stated. Since the response fully confirms both the factors and their weights as described in the expectation, the response is correct.            8064
+                      Draft a note to the buyer at MASS_A about the SKU-00135 shortfall.  None                                                                                                                                                                                                                                                                                                                                                                                                                  The response includes a note to the buyer that explicitly names SKU-00135 and states the shortfall factually by indicating the available inventory (32 units) against the total demand (2951 units), as well as the allocation to MASS_A (24 units) and the unmet request (1742 units). Therefore, both parts of the expectation are supported by the response. The response is correct.           12761
+                     If we could only ship one account for SKU-00135, which one and why?  None                                                                                                                                                                                                                                                                                                  The claim states that one account is named and the reason references severity or contractual commitment. The response specifies that MASS_A is the account chosen to ship the 32 units of SKU-00135, citing its highest severity score, largest demand share, highest revenue at risk, and tightest contractual commitment. Therefore, the claim is supported by the document as it identifies the account and provides reasons related to severity and contractual commitment. The response is correct.           23325
+                                    What payment terms do our supplier invoices specify?  None                                                                                                                                                                                                                                                                                                                                                                   The expectation states that payment terms are quoted from a supplier document and identifies the supplier or document. The response provides specific payment terms for different suppliers, which supports the claim that payment terms are quoted from a supplier document. Additionally, the suppliers are identified in the response. Therefore, the expectation is fully supported by the response in the context of the question.            6057
+What production lead time did the supplier quote, and what does that mean for covering a  None                                                                                                                                                                                                                                                            The claim states that a quoted lead time in days is given, which is supported by the response that specifies quoted production lead times ranging from 68 to 108 days. The claim also mentions that the implication for covering a spike is stated, which is supported by the response that explains how a demand spike developing inside the lead time cannot be covered by ocean replenishment and outlines the implications and strategies for managing such a situation. Therefore, both parts of the claim are supported by the response.            6816
+               What safety standards are referenced in the product specification sheets?  None                                                                                                                                                                                                                                                                                                                                          The response lists several safety standards, including ASTM F963-17, EN71-1/2/3 compliant, and 16 CFR 1500.44. This indicates that at least one safety standard is named, which supports the first part of the expectation. Additionally, the standards are attributed to specification documents as they are referenced in the context of product specification sheets. Therefore, the expectation is fully supported by the response. The response is correct.            6467
+                                      What is the stockout risk for SKU-99999 at MASS_A?  None The expectation states that the response indicates no risk record exists for SKU-99999 at MASS_A and that the response does not invent figures for it. The response states that no stockout risk is projected for SKU-99999 at MASS_A over the 13-week forecast horizon, explaining that either the SKU has sufficient inventory or there is no active forecast for this SKU-retailer combination. While the response does not explicitly say 'no risk record exists,' it effectively communicates that no stockout risk is projected, which implies no risk is recorded or forecasted. Additionally, the response does not provide any invented figures, aligning with the claim that no figures are invented. Therefore, the response supports the essence of the expectation. The response is correct.            1482
+                                 What is the fill rate for retailer MASS_Z on SKU-01723?  None                                                                                                                                                                                                                                                                                                                                                                               The response states that MASS_Z is not a valid retailer code in the system and lists the valid retailer codes. It also mentions that the tool returned an error because of this invalid code. The expectation states that MASS_Z is not a known retailer and no fill rate is fabricated for it. This aligns exactly with the information in the response. Therefore, the response is correct in supporting the expectation.            1827
+                                       What is the gross margin percentage on SKU-00135?  None                                                                                                                                                                                                                                                                                                                                                                                                                  The response states that the respondent does not have a tool that returns gross margin or cost data, indicating that the specific gross margin percentage for SKU-00135 is not available. This aligns with the claim that the response does not state a specific gross margin percentage and indicates that the value is unavailable. Therefore, the claim is supported by the document.            1205
+                       Estimate what our Q1 2027 demand for SKU-01723 will be, in units.  None                                                                                                                                                                                                                      The response states that it does not have a tool to forecast future demand or provide historical sales trends for modeling, which implies that it cannot produce a figure for Q1 2027 demand for SKU-01723. The document also mentions that to estimate demand, one would need access to historical sales data, seasonality patterns, and other factors, which it does not have. Therefore, the claim that the response declines to produce a figure beyond the forecast horizon and does not extrapolate a number of its own is supported by the document. The response is correct.            1661
 ```
 
 ## 11. Log and register the agent in Unity Catalog
@@ -1478,20 +1476,20 @@ print("all versions:", agent_versions)
 _Output:_
 
 ```text
-🔗 View Logged Model at: https://fevm-stable-classic-pqjg18.cloud.databricks.com/ml/experiments/2590193212819414/models/m-02bd5fa27b214f8da1f4efb0f1397776?o=7474649643770783
-2026/10/09 21:43:32 INFO mlflow.pyfunc: Predicting on input example to validate output
-2026/10/09 21:43:34 WARNING mlflow.tracing.fluent: No active trace found. Please create a span using `mlflow.start_span` or `@mlflow.trace` before calling `mlflow.update_current_trace`.
-2026/10/09 21:43:40 WARNING mlflow.tracing.fluent: No active trace found. Please create a span using `mlflow.start_span` or `@mlflow.trace` before calling `mlflow.update_current_trace`.
-2026/10/09 21:43:42 WARNING mlflow.tracing.fluent: No active trace found. Please create a span using `mlflow.start_span` or `@mlflow.trace` before calling `mlflow.update_current_trace`.
-2026/10/09 21:43:47 WARNING mlflow.tracing.fluent: No active trace found. Please create a span using `mlflow.start_span` or `@mlflow.trace` before calling `mlflow.update_current_trace`.
+🔗 View Logged Model at: https://fevm-stable-classic-pqjg18.cloud.databricks.com/ml/experiments/2590193212819414/models/m-be7c9326f1974b4a9223fc9155f19505?o=7474649643770783
+2026/10/15 19:13:33 INFO mlflow.pyfunc: Predicting on input example to validate output
+2026/10/15 19:13:33 WARNING mlflow.tracing.fluent: No active trace found. Please create a span using `mlflow.start_span` or `@mlflow.trace` before calling `mlflow.update_current_trace`.
+2026/10/15 19:13:38 WARNING mlflow.tracing.fluent: No active trace found. Please create a span using `mlflow.start_span` or `@mlflow.trace` before calling `mlflow.update_current_trace`.
+2026/10/15 19:13:39 WARNING mlflow.tracing.fluent: No active trace found. Please create a span using `mlflow.start_span` or `@mlflow.trace` before calling `mlflow.update_current_trace`.
+2026/10/15 19:13:43 WARNING mlflow.tracing.fluent: No active trace found. Please create a span using `mlflow.start_span` or `@mlflow.trace` before calling `mlflow.update_current_trace`.
 Registered model 'toy_demand_allocation.ml.allocation_agent' already exists. Creating a new version of this model...
-🔗 Created version '4' of model 'toy_demand_allocation.ml.allocation_agent': https://fevm-stable-classic-pqjg18.cloud.databricks.com/explore/data/models/toy_demand_allocation/ml/allocation_agent/version/4?o=7474649643770783
-🏃 View run log_allocation_agent at: https://fevm-stable-classic-pqjg18.cloud.databricks.com/ml/experiments/2590193212819414/runs/d73818215e5149539f58b585c69ba7f0
+🔗 Created version '5' of model 'toy_demand_allocation.ml.allocation_agent': https://fevm-stable-classic-pqjg18.cloud.databricks.com/explore/data/models/toy_demand_allocation/ml/allocation_agent/version/5?o=7474649643770783
+🏃 View run log_allocation_agent at: https://fevm-stable-classic-pqjg18.cloud.databricks.com/ml/experiments/2590193212819414/runs/2ccfa90797b94b328bea53a3824a31c3
 🧪 View experiment at: https://fevm-stable-classic-pqjg18.cloud.databricks.com/ml/experiments/2590193212819414
-logged model uri : models:/m-02bd5fa27b214f8da1f4efb0f1397776
+logged model uri : models:/m-be7c9326f1974b4a9223fc9155f19505
 registered name  : toy_demand_allocation.ml.allocation_agent
-registered version 4, alias @champion
-all versions: [1, 2, 3, 4]
+registered version 5, alias @champion
+all versions: [1, 2, 3, 4, 5]
 ```
 
 ## 12. Deploy to Model Serving and query the live endpoint
@@ -1517,11 +1515,11 @@ print("served model  :", getattr(deployment, "served_entity_name", None))
 _Output:_
 
 ```text
-/local_disk0/.ephemeral_nfs/envs/pythonEnv-d0f6dd2d-64df-4437-ad33-78dfb1aa8ddf/lib/python3.12/site-packages/databricks/agents/deployments.py:641: UserWarning: This endpoint is being deployed without a feedback model, which has been deprecated.
+/local_disk0/.ephemeral_nfs/envs/pythonEnv-7b4a8f2c-435d-4d41-a2f5-fd0bad1682a3/lib/python3.12/site-packages/databricks/agents/deployments.py:641: UserWarning: This endpoint is being deployed without a feedback model, which has been deprecated.
 For more information, see: https://docs.databricks.com/aws/en/generative-ai/agent-framework/feedback-model
   warnings.warn(
 
-    Deployment of toy_demand_allocation.ml.allocation_agent version 4 initiated.  This can take up to 15 minutes and the Review App & Query Endpoint will not work until this deployment finishes.
+    Deployment of toy_demand_allocation.ml.allocation_agent version 5 initiated.  This can take up to 15 minutes and the Review App & Query Endpoint will not work until this deployment finishes.
 
     View status: https://fevm-stable-classic-pqjg18.cloud.databricks.com/ml/endpoints/toy-allocation-agent/?o=7474649643770783
     Review App: https://fevm-stable-classic-pqjg18.cloud.databricks.com/ml/review-v2/ca2a5c5a07d94275a19798539f5448ff/chat?o=7474649643770783
@@ -1531,8 +1529,8 @@ You can refer back to the links above from the endpoint detail page at https://f
 To set up monitoring for your deployed agent, see:
 https://docs.databricks.com/aws/en/mlflow3/genai/eval-monitor/production-monitoring
 endpoint name : toy-allocation-agent
-query url     : https://fevm-stable-classic-pqjg18.cloud.databricks.com/serving-endpoints/toy-allocation-agent/served-models/toy_demand_allocation-ml-allocation_agent_4/invocations?o=7474649643770783
-served model  : toy_demand_allocation-ml-allocation_agent_4
+query url     : https://fevm-stable-classic-pqjg18.cloud.databricks.com/serving-endpoints/toy-allocation-agent/served-models/toy_demand_allocation-ml-allocation_agent_5/invocations?o=7474649643770783
+served model  : toy_demand_allocation-ml-allocation_agent_5
 ```
 
 ```python
@@ -1558,6 +1556,9 @@ _Output:_
 
 ```text
 ready=EndpointStateReady.READY config_update=EndpointStateConfigUpdate.IN_PROGRESS
+  ready=EndpointStateReady.READY config_update=EndpointStateConfigUpdate.IN_PROGRESS
+  ready=EndpointStateReady.READY config_update=EndpointStateConfigUpdate.IN_PROGRESS
+  ready=EndpointStateReady.READY config_update=EndpointStateConfigUpdate.IN_PROGRESS
   ready=EndpointStateReady.READY config_update=EndpointStateConfigUpdate.IN_PROGRESS
   ready=EndpointStateReady.READY config_update=EndpointStateConfigUpdate.IN_PROGRESS
   ready=EndpointStateReady.READY config_update=EndpointStateConfigUpdate.IN_PROGRESS
@@ -1628,59 +1629,59 @@ RESPONSE (raw JSON, first 3000 chars):
     ],
     "token_usage": {
       "input_tokens": 4444,
-      "output_tokens": 264
+      "output_tokens": 271
     }
   },
   "object": "response",
   "databricks_output": {
-    "databricks_request_id": "84c1f62c-3d18-48c1-b43d-c861a6f2d65d"
+    "databricks_request_id": "ffd0115a-fbb0-4ad2-8ab3-0bf947853d38"
   },
-  "id": "84c1f62c-3d18-48c1-b43d-c861a6f2d65d",
+  "id": "ffd0115a-fbb0-4ad2-8ab3-0bf947853d38",
   "output": [
     {
       "name": "get_stockout_risk",
-      "id": "fc_5d00e9a96e98",
+      "id": "fc_2e83ecd9cbac",
       "type": "function_call",
-      "call_id": "toolu_bdrk_01KxyJkpydgJJcBTbPmSJmQ7",
+      "call_id": "toolu_bdrk_01NtVfYQMoMG2v7NyiK3PZHB",
       "arguments": "{\"sku_id\":\"SKU-00135\"}"
     },
     {
       "type": "function_call_output",
-      "call_id": "toolu_bdrk_01KxyJkpydgJJcBTbPmSJmQ7",
+      "call_id": "toolu_bdrk_01NtVfYQMoMG2v7NyiK3PZHB",
       "output": "{\"error\": \"get_stockout_risk failed: RuntimeError: tool query failed: [INSUFFICIENT_PERMISSIONS] Insufficient privileges:\\nUser does not have USE CATALOG on Catalog 'toy_demand_allocation'. SQLSTATE: 42501\"}"
     },
     {
       "name": "get_inbound_eta",
-      "id": "fc_688ee7f2344f",
+      "id": "fc_34c8e5b6122d",
       "type": "function_call",
-      "call_id": "toolu_bdrk_01DsaAG1xjyUREjAiDaamtKH",
+      "call_id": "toolu_bdrk_01WuvFMAXTHtJeTmt6aMuZB9",
       "arguments": "{\"sku_id\":\"SKU-00135\"}"
     },
     {
       "type": "function_call_output",
-      "call_id": "toolu_bdrk_01DsaAG1xjyUREjAiDaamtKH",
+      "call_id": "toolu_bdrk_01WuvFMAXTHtJeTmt6aMuZB9",
       "output": "{\"error\": \"get_inbound_eta failed: RuntimeError: tool query failed: [INSUFFICIENT_PERMISSIONS] Insufficient privileges:\\nUser does not have USE CATALOG on Catalog 'toy_demand_allocation'. SQLSTATE: 42501\"}"
     },
     {
       "name": "get_fill_rate_history",
-      "id": "fc_3ca5b2e3892e",
+      "id": "fc_9d125c70d78f",
       "type": "function_call",
-      "call_id": "toolu_bdrk_018YT36MxWyVVM3mZ4afUAjs",
+      "call_id": "toolu_bdrk_01SXjHL7Cz1zReC8SdJPPFbW",
       "arguments": "{\"weeks\":8}"
     },
     {
       "type": "function_call_output",
-      "call_id": "toolu_bdrk_018YT36MxWyVVM3mZ4afUAjs",
+      "call_id": "toolu_bdrk_01SXjHL7Cz1zReC8SdJPPFbW",
       "output": "{\"error\": \"get_fill_rate_history failed: RuntimeError: tool query failed: [INSUFFICIENT_PERMISSIONS] Insufficient privileges:\\nUser does not have USE CATALOG on Catalog 'toy_demand_allocation'. SQLSTATE: 42501\"}"
     },
     {
       "role": "assistant",
-      "id": "msg_f63e89a80d38",
+      "id": "msg_b2191f27b11e",
       "status": "completed",
       "content": [
         {
           "type": "output_text",
-          "text": "All three tools returned permission errors. The system does not have access to the `toy_demand_allocation` catalog required to retrieve stockout risk, inbound shipments, or fill-rate history for SKU-00135.\n\nI cannot provide a recommendation without access to:\n- Projected stockout timing and units at risk per retailer\n- Available supply (on-hand plus inbound)\n- Fill-rate performance by account\n\nPlease escalate the catalog permission issue to your data platform team before proceeding with the allocation decision."
+          "text": "I cannot retrieve the data needed to answer your question. All three tools returned permission errors indicating insufficient privileges on the `toy_demand_allocation` catalog. \n\nTo recommend an allocation for SKU-00135, I need:\n- Stockout risk data (units at risk, timing, by retailer)\n- Inbound supply visibility (what's en route and when it lands)\n- Fill-rate history (how each account is performing against commitment)\n\nPlease contact your system administrator to grant USE CATALOG permissions, or confirm that the data sources are available."
         }
       ],
       "type": "message"
@@ -1711,15 +1712,15 @@ _Output:_
 ================================================================================
 LIVE ENDPOINT ANSWER
 ================================================================================
-All three tools returned permission errors. The system does not have access to the `toy_demand_allocation` catalog required to retrieve stockout risk, inbound shipments, or fill-rate history for SKU-00135.
+I cannot retrieve the data needed to answer your question. All three tools returned permission errors indicating insufficient privileges on the `toy_demand_allocation` catalog. 
 
-I cannot provide a recommendation without access to:
-- Projected stockout timing and units at risk per retailer
-- Available supply (on-hand plus inbound)
-- Fill-rate performance by account
+To recommend an allocation for SKU-00135, I need:
+- Stockout risk data (units at risk, timing, by retailer)
+- Inbound supply visibility (what's en route and when it lands)
+- Fill-rate history (how each account is performing against commitment)
 
-Please escalate the catalog permission issue to your data platform team before proceeding with the allocation decision.
+Please contact your system administrator to grant USE CATALOG permissions, or confirm that the data sources are available.
 ================================================================================
 
-custom_outputs: {"llm_endpoint": "databricks-claude-sonnet-4-5", "prompt": "source-file fallback (mlflow: MlflowException, uc: RuntimeError)", "tools_called": ["get_stockout_risk", "get_inbound_eta", "get_fill_rate_history"], "token_usage": {"input_tokens": 4444, "output_tokens": 264}}
+custom_outputs: {"llm_endpoint": "databricks-claude-sonnet-4-5", "prompt": "source-file fallback (mlflow: MlflowException, uc: RuntimeError)", "tools_called": ["get_stockout_risk", "get_inbound_eta", "get_fill_rate_history"], "token_usage": {"input_tokens": 4444, "output_tokens": 271}}
 ```

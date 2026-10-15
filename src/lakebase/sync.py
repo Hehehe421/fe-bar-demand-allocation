@@ -1,15 +1,16 @@
 """Stage D — create the synced tables that form the app's read path.
 
-Four Unity Catalog tables are replicated into Lakebase Postgres so the app can
-serve its worklist from a point lookup instead of a warehouse query per page
-load.
+Two Unity Catalog tables -- the at-risk worklist (``stockout_risk_current``) and
+the 13-week forecast (``forecast_next_13w``) -- are replicated into Lakebase
+Postgres so the app can serve its worklist from a point lookup instead of a
+warehouse query per page load.
 
 Two things about this workspace make the naive call fail, and both are worth
 knowing before reading the spec below.
 
 **1. The sync pipeline needs an explicit storage catalog, and only the REST
 API will accept one.**
-The first attempt created all four synced tables successfully and then every
+The first attempt created all four synced tables (later cut to two) successfully and then every
 one of them went to ``SYNCED_TABLE_OFFLINE_FAILED``, with the underlying
 pipeline reporting::
 
@@ -31,22 +32,21 @@ a declarative pipeline cannot write its event log into a Postgres-backed schema.
 The same missing storage root is what forced an explicit ``--storage-root`` when
 this project's catalog was created.
 
-**2. Two of the four sources had to be re-pointed.**
-``dim_product`` carries the Stage B column mask and ``agg_fill_rate_summary``
-carries the row filter, and Unity Catalog refuses to build an online copy of
-either::
+**2. A governance finding, and why two tables were dropped.**
+The build originally synced four tables. Two of the sources -- ``dim_product``
+(Stage B column mask) and ``agg_fill_rate_summary`` (row filter) -- could not be
+synced, because Unity Catalog refuses to build an online copy of either::
 
     Table ... cannot have both row/column security and online materialized views
 
 That is UC closing a governance hole rather than an obstacle: an online replica
-sits outside the policy, so syncing a masked table would leak exactly the
-column the mask protects. The resolution is to sync projections that hold no
-protected data — ``gold.svc_product_lookup`` omits cost and margin entirely, so
-there is nothing left to mask. Retailer scoping for the Lakebase read path
-therefore moves into the app's own query; the authoritative governed path stays
-Unity Catalog and Genie.
+sits outside the policy, so syncing a masked table would leak exactly the column
+the mask protects. They were first worked around with unprotected ``svc_*``
+projections, then dropped when the app turned out to need only the worklist and the
+forecast. Retailer scoping for the Lakebase read path therefore lives in the app's
+own query; the authoritative governed path stays Unity Catalog and Genie.
 
-    python -m src.lakebase.sync            # create (or recreate) all four
+    python -m src.lakebase.sync            # create (or recreate) both
     python -m src.lakebase.sync --status   # report state only
     python -m src.lakebase.sync --recreate # delete then create
 """

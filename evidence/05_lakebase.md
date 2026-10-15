@@ -1,5 +1,19 @@
 # Evidence 05 — Stage D: Lakebase operational serving and write-back
 
+> **Update 2026-10-15 — trimmed from four synced tables to two.** The app reads
+> only the at-risk worklist and the forecast, so `stockout_risk_current` and
+> `forecast_next_13w` were kept and `product_lookup` / `fill_rate_summary` were
+> removed, together with the `gold.svc_product_lookup` / `gold.svc_fill_rate_summary`
+> projections that existed only to feed them. Both kept tables were re-synced after
+> the forecaster rebuild and match Unity Catalog exactly (`stockout_risk_current`
+> 3,016 = 3,016, `forecast_next_13w` 58,474 = 58,474; 25 decisions in Lakebase =
+> 25 in `gold.fct_allocation_decisions`). The governance finding below — Unity
+> Catalog refusing an online copy of a table with a row filter or column mask — is
+> unchanged and is the reason the two dropped tables needed projections at all. The
+> sections below are the record of the original four-table run and are kept as it
+> happened.
+
+
 | | |
 |---|---|
 | Produced by | `src/lakebase/sync.py`, `src/lakebase/provision.py --report`, `src/lakebase/writeback.py` |
