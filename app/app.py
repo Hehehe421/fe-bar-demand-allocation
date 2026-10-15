@@ -219,7 +219,7 @@ def right_column() -> html.Div:
                      "the batch forecast above. Same model, two serving paths.", className="hint"),
             dbc.Button("Re-forecast now", id="rt-btn", color="primary", outline=True, size="sm"),
             html.Span("  First call after idle can take 2–3 minutes while the endpoint scales up "
-                      "from zero (measured: 138 s).", className="small-note ms-2"),
+                      "from zero (measured: 52 s and 138 s on two occasions).", className="small-note ms-2"),
             dcc.Loading(html.Div(id="rt-out", className="mt-2"), type="circle"),
         ], className="card-s"),
         html.Div([
@@ -430,7 +430,7 @@ def agent(sel: dict | None, _n: int, question: str | None):
         out.append(alert([html.B(f"{len(r['tool_errors'])} tool call(s) failed. "),
                           "The answer below is not based on data. ", html.Br(),
                           html.Span(r["tool_errors"][0], className="mono")], "danger"))
-    out += [html.Div(r["answer"] or "(no answer)", className="answer"),
+    out += [dcc.Markdown(r["answer"] or "(no answer)", className="answer"),
                       html.Div([html.Span(t, className="chip") for t in r["tools"]], className="mt-2")]
     alloc = r["allocation"]
     if alloc and alloc.get("claims"):
@@ -556,7 +556,7 @@ def genie(_n: int, _s: int, q: str | None):
         return alert(f"Genie call failed: {str(e)[:260]}", "danger")
     out: list[Any] = []
     if r["text"]:
-        out.append(html.Div(r["text"], className="answer"))
+        out.append(dcc.Markdown(r["text"], className="answer"))
     if r["rows"]:
         out.append(dash_table.DataTable(
             columns=[{"name": c, "id": c} for c in r["columns"]],

@@ -1,9 +1,9 @@
 # Demand forecasting and constrained allocation for a licensed toy manufacturer
 
-> **Build status: 6 of 7 stages complete.** Stages A (Lakeflow), B (Unity
+> **Build status: 7 of 8 items complete.** Stages A (Lakeflow), B (Unity
 > Catalog), C1 (classical ML, batch and real-time), C2 (GenAI agent), D
-> (Lakebase) and E (Genie) are built, executed and evidenced. Stage F (the app)
-> and the deck are **not built**, and nothing in this repository claims
+> (Lakebase) and E (Genie) and F (the app) are built, executed and evidenced. The deck
+> and docs are **not built**, and nothing in this repository claims
 > otherwise: no empty modules, no unexecuted notebooks, no asserted results for
 > anything unbuilt. See [Build status](#build-status) for exactly what exists.
 > **All data is synthetic.**
@@ -81,7 +81,7 @@ landing files -> bronze/silver/gold -> features -> forecast -> risk table
 | **C2 — GenAI** | MLflow `ResponsesAgent` on Claude via FMAPI with 5 real tools, end-to-end tracing, versioned prompt, 22-row eval with built-in judges + a custom mechanical scorer, registered in UC and deployed to a live Model Serving endpoint | **Built** |
 | **D — Lakebase** | Autoscaling project registered in UC; 2 synced tables ONLINE matching UC row-for-row; native OLTP `allocation_decisions` / `agent_interactions`; decisions merged back into `gold.fct_allocation_decisions` | **Built** |
 | **E — Genie** | Space over 4 Gold tables + 4 governed metric views with synonyms, joins, curated example SQL and 12 benchmarks; 13 questions through the Conversation API scored against reference SQL, including one Genie got wrong intermittently | **Built** |
-| **F — Databricks App** | "Allocation Command Center": KPI header, at-risk worklist, SKU detail, agent panel, accept/override writing to Lakebase, embedded Genie | Not built |
+| **F — Databricks App** | "Allocation Command Center": KPI header, at-risk worklist, SKU detail with batch and real-time forecast, agent panel, accept/override/defer writing to Lakebase, Genie | **Built** |
 
 ## Evidence index
 
@@ -120,12 +120,17 @@ than asserted:
   exposure on exactly the trend items that matter most — recorded as a
   limitation rather than averaged away into a single portfolio number.
 - **The agent is correct more often than it is grounded.** `Correctness` passes
-  19 of 22 rows, but the custom mechanical scorer finds only 73.9% of the
-  numbers in its answers trace back to actual tool output, with 4 of 22 answers
+  19 of 22 rows, but the custom mechanical scorer finds only 74.1% of the
+  numbers in its answers trace back to actual tool output, with 5 of 22 answers
   fully grounded. Two LLM judges and one mechanical check disagree, and the
-  mechanical one is right — which is the whole argument for having it. (A first
-  run scored 20 of 22 and 74.5%; the spread between runs is itself part of the
+  mechanical one is right — which is the whole argument for having it. (Earlier
+  runs scored 20/22 · 74.5% and 19/22 · 73.9%; the spread is itself part of the
   finding.)
+- **A deployed agent can look fine while every tool fails.** The first deployment's
+  tools all returned permission errors and the model wrote a fluent refusal around
+  them; it went unnoticed until the app's agent panel exposed it. The fix declared the
+  tables the tools read as model resources, and the run now fails if any live tool call
+  returns an error.
 
 ## How to run it
 

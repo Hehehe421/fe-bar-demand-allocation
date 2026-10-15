@@ -39,7 +39,7 @@ AutoML appears once, early, as *"and yes, you can do it this way too."* Shown, n
 
 ---
 
-## 2. State: 6 of 8 items built
+## 2. State: 7 of 8 items built
 
 | Stage | State | Evidence |
 |---|---|---|
@@ -48,11 +48,11 @@ AutoML appears once, early, as *"and yes, you can do it this way too."* Shown, n
 | **C1 §A — AutoML** | Built, 18 trials | `notebooks/exports/03a_automl.md` |
 | **C1 §C — sweep** | Built, 7 candidates / 6 families | `evidence/03_ml_forecast.md` |
 | **C1 §D — batch + real-time** | **Built and verified** | `evidence/03_ml_forecast.md`, notebook 03 §12–13 |
-| **C2 — GenAI agent** | Built, re-run on current data, endpoint serving v5 | `evidence/04_genai_agent.md` |
+| **C2 — GenAI agent** | Built; endpoint **now actually reads data** (it could not before — §6 #39–41) | `evidence/04_genai_agent.md` |
 | **D — Lakebase** | Built, trimmed to 2 synced tables | `evidence/05_lakebase.md` |
 | **E — Genie** | **Built**, 13/13, one intermittent error recorded | `evidence/06_genie.md` |
-| **F — App** | **Not built — START HERE** | — |
-| **Deck + docs** | Not built | — |
+| **F — App** | **Built and deployed**, 10/10 smoke, decision flow verified on the deployed app | `evidence/07_app.md` |
+| **Deck + docs** | **Not built — START HERE** | — |
 
 ### Headline measured numbers (all computed, none asserted)
 
@@ -68,9 +68,11 @@ AutoML appears once, early, as *"and yes, you can do it this way too."* Shown, n
   the items that matter. Preserve this through any rebuild.
 - `sklearn_hist_gbm` is **unstable** under Poisson loss: 92.99% on one run,
   138.7% on the next, same hyperparameters. Reported as measured, not tuned.
-- Agent: `Correctness` 19/22 but only **73.9%** of its numbers trace to tool
-  output; 4/22 answers fully grounded (an earlier run: 20/22, 74.5%, 5/22).
-  A mechanical scorer catches what two LLM judges miss.
+- Agent: `Correctness` 19/22 but only **74.1%** of its numbers trace to tool
+  output; 5/22 answers fully grounded (earlier runs: 20/22 · 74.5% · 5/22 and
+  19/22 · 73.9% · 4/22 — the spread is part of the finding). A mechanical scorer
+  catches what two LLM judges miss. **The live endpoint's tool calls are now verified
+  to return data** (8/8 in a direct probe; a notebook cell fails the run otherwise).
 - Lakebase: 2 synced tables ONLINE matching UC row-for-row (3,016 and 58,474);
   25 decisions round-tripped to UC; 0.051 ms server-side point lookup.
 - Real-time vs batch: SKU-01723 / MASS_A, horizon 1 → p50 **2,154.33**, p90
@@ -96,13 +98,15 @@ profile **`vm-summer-classic`**, workspace id `7474649643770783`.
 | Experiments | sweep `4347060009219469` · agent `2590193212819414` · AutoML `3440760213960864` | |
 | Model — forecaster (batch) | `ml.demand_forecaster` | v13 `@champion` (lightgbm), v14 `@challenger` (xgboost); feature-backed, for `fe.score_batch` |
 | Model — forecaster (real-time) | `ml.demand_forecaster_rt` | v3 `@champion`, v4 `@challenger`; plain pyfunc, for serving |
-| Model — agent | `ml.allocation_agent` | v5 `@champion` |
+| Model — agent | `ml.allocation_agent` | v8 `@champion` (versions 4–7 are superseded) |
 | Endpoint — forecaster | `toy-demand-forecaster` | **READY**, serves rt v3, scale-to-zero. A *deploy* takes 20–25 min (queue + build); scale-from-zero cold start was **not measured**, so warm it before a demo |
-| Endpoint — agent | `toy-allocation-agent` | **READY**, v5 at 100%; v4 left at 0% as a rollback (scale-to-zero, free) |
+| Endpoint — agent | `toy-allocation-agent` | **READY**, v8 at 100%. Served entities for v4–v7 are still attached at 0% (`agents.deploy` accumulates them; scale-to-zero, so free). Removing them means re-submitting the endpoint config — not done, to avoid risking a working endpoint |
 | Lakebase project | `projects/toy-demand-alloc` | PG 17, Autoscaling |
 | Lakebase host | `ep-empty-butterfly-d2dihd0i.database.us-east-1.cloud.databricks.com` | |
 | UC online catalog | `toy_demand_alloc_online` | 2 synced tables: `stockout_risk_current`, `forecast_next_13w` |
 | Genie space | `Demand & Allocation`, id `01f1c8cc66d713fba1decec949c0740c` | id also in `evidence/metrics/genie_space.json` |
+| App | `allocation-command-center` — https://allocation-command-center-7474649643770783.aws.databricksapps.com | service principal `73bbee7a-df47-4bb9-b503-30e5b392657f`; source `/Workspace/Users/sixuan.he@databricks.com/apps/allocation-command-center` |
+| View | `gold.v_stockout_risk` | the agent's read path for stockout risk — workaround, §6 #41 |
 | Notebooks in workspace | `/Workspace/Users/sixuan.he@databricks.com/fe-bar-demand-allocation/notebooks/` | with outputs |
 | Source in workspace | `.../fe-bar-demand-allocation/src/` | re-upload after editing `src/` |
 
@@ -194,42 +198,32 @@ notebook with a failing cell; end messages with
 
 ## 5. Next actions, in order
 
-### 5a. Stage F — the app (START HERE)
+### 5a. Stage F — the app: DONE; what is left
 
-"Allocation Command Center", a Databricks App reading from Lakebase:
-KPI header · at-risk worklist (`stockout_risk_current` by `severity_score`, filtered
-on `risk_tier`) · SKU detail (forecast p50/p90 from `forecast_next_13w`) · agent panel
-calling the live `toy-allocation-agent` and showing the trace id · **decide → writes
-to Lakebase** (`allocation.allocation_decisions`) · embedded Genie.
+Built, deployed and verified (`evidence/07_app.md`). Open items, none blocking:
 
-- Stage D's story belongs *here*, narrated as decision capture rather than as synced
-  tables. Invoke the `dataviz` skill before any chart code; read
-  `databricks-app-python` (or `-apx`) first.
-- **Design point to settle:** none of the 2 synced tables hold the 33 model features,
-  so the app **cannot** build a real-time forecast request from Lakebase (the old
-  docstring claiming it could was wrong and has been corrected). Default: for a
-  "what-if" call, read the one feature row from `ml.demand_features_weekly` through the
-  warehouse (~1 s), post it to `toy-demand-forecaster`, and say so on screen. A third
-  synced table was considered and rejected to keep the read path at 2; revisit only if
-  the demo needs sub-100 ms what-ifs.
-- KPI header: `agg_fill_rate_summary` is **no longer synced**. Read fill rate / OTIF via
-  the warehouse (metric views) or compute from the app; do not re-add `svc_*` tables.
-- Retailer scoping lives in the app's own query (UC will not build an online copy of
-  a table with a row filter — `evidence/02`, `evidence/05`).
-- Add a warm-up call to `tests/smoke_app.py`: both serving endpoints scale to zero and
-  the forecaster's cold start is long.
-- Evidence: `evidence/07_app.md`.
+- **The deployed UI was never clicked through in a browser** — workspace SSO blocked the
+  automation. Open the URL once yourself and try: select a row → Ask the agent → Record
+  decision. Then delete the row you create (or keep it and re-sync: the KPIs and Genie
+  counts assume the 25 seeded decisions).
+- **Per-user planner scoping is simulated** (a dropdown filtering the app's own query).
+  Real scoping needs on-behalf-of auth mapped to a retailer.
+- **Run `python app/deploy.py --grants` after any `sync.py` re-sync** — re-creating a synced
+  table drops the app role's `SELECT` on it.
+- The decision is not written back to UC by the app; `src/lakebase/writeback.py` does that
+  as a job and was not re-run.
 
-### 5b. Deck and docs — protect this one
+### 5b. Deck and docs — START HERE
 
 `deck/allocation_deck.{md,pdf}` · `docs/TALK_TRACK.md` (business **and** technical,
 90-second and 5-minute each) · `docs/ARCHITECTURE.md` · `docs/BUSINESS_CASE.md` ·
 `databricks.yml` · `tests/`
 
-This is a separately scored FE Bar domain. **If time is short, do this before F:**
-a sharp compete story with honest gaps beats seven thin stages. The honest gaps to
-carry are in §2 (trend-item p90 under-coverage, grounding 73.9%, hist-GBM instability,
-Genie's intermittent table-choice error, LightGBM run-to-run spread).
+This is a separately scored FE Bar domain and the only remaining item. A sharp compete story
+with honest gaps beats a long one. The gaps to carry are in §2 and `evidence/`: trend-item
+p90 under-coverage (74.1% vs 90%), grounding 74.1%, hist-GBM instability, Genie's
+intermittent table-choice error (p ≈ 0.07), LightGBM run-to-run spread, and the agent
+endpoint that shipped for a week unable to read any data (§6 #39).
 
 ### 5c. Optional
 
@@ -342,6 +336,37 @@ Genie's intermittent table-choice error, LightGBM run-to-run spread).
     3 FAILs, one was my scorer, one was my ambiguous question, and one was Genie.
 
 ---
+
+**Agent endpoint, Apps and auth (added when building Stage F)**
+39. **A deployed agent can answer fluently while every tool fails.** The endpoint runs its
+    tools as its own identity, which is granted only *declared* resources. The agent was logged
+    with the LLM endpoint + warehouse only, so every tool returned `INSUFFICIENT_PERMISSIONS
+    ... USE CATALOG` and the model wrote a plausible refusal. It was in the committed export for
+    a week. Declare every UC object the tools read (`config.AGENT_UC_TABLES`) as
+    `DatabricksTable` resources, and **assert on `function_call_output`, not on the prose**
+    (notebook 04's last cell and `tests/smoke_app.py` do).
+40. Declared-resource access does **not** show in `SHOW GRANTS`. Do not conclude it is missing
+    from an empty grants list.
+41. **Observed, cause not isolated:** with all seven tables declared, the endpoint could read
+    six (materialized views, a metric view, two Delta tables) but not `gold.fct_stockout_risk`
+    (`does not have SELECT on Table`), though the app's service principal reads it fine. Declaring
+    it first or last made no difference. The tools read `gold.v_stockout_risk` (a view) instead.
+42. `system.access.audit` and `system.query.history` lag by minutes to an hour; they did not
+    help diagnose a live failure. Probe the endpoint directly instead.
+43. Forecaster **cold start from scale-to-zero: 52 s and 138 s** (two measurements). The app
+    pings it at start-up (`WARMUP=1`) and `tests/smoke_app.py` warms it first.
+44. Apps runtime is **Python 3.11** and serves on `DATABRICKS_APP_PORT` (it was 8000, not 8080);
+    read the env var. `psycopg` is not pre-installed — put it in `requirements.txt`.
+45. `AppResourcePostgres` (branch + database + `CAN_CONNECT_AND_CREATE`) creates the app's
+    Postgres role, but **grants on tables are yours to apply** (`app/deploy.py` does). The role
+    name is the app's service-principal client id.
+46. The Apps URL needs workspace SSO. Browser automation hits the login page; drive the
+    callbacks over HTTP with `databricks auth token --profile vm-summer-classic` instead.
+47. **The CLI profile's refresh token expires mid-session** ("refresh token is invalid") while
+    a cached access token keeps some calls working for up to an hour — a confusing half-failure.
+    `databricks auth login --profile vm-summer-classic` fixes it and completed without a click.
+48. `chrome-devtools` `wait_for` returns the whole page snapshot; with a 250-row table it blew
+    the output limit. The worklist is paginated for this reason too.
 
 ## 7. Cost — check before and after
 

@@ -65,6 +65,10 @@ Probe objects created while diagnosing the endpoint failure (`_probe_*` models a
 feature table, an experiment, a throwaway endpoint) and the failed
 `demand_forecaster` endpoint were deleted on 2026-10-15.
 
+**App (session 2)** — Databricks App `allocation-command-center` and its service principal;
+resources: SQL warehouse, `toy-allocation-agent`, `toy-demand-forecaster`, the Genie space, and
+the Lakebase database. View `gold.v_stockout_risk` for the agent's read path.
+
 **Genie (session 2)** — space `Demand & Allocation`, id in
 `evidence/metrics/genie_space.json`.
 
