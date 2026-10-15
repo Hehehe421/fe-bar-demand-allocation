@@ -239,54 +239,86 @@ def decide_tab() -> html.Div:
                   dbc.Button("Export CSV", id="export-btn", size="sm", color="secondary", outline=True,
                              className="float-end no-print"), dcc.Download(id="export-dl")], className="mt-2"),
     ])
-    left = [
-        ui.section("At-risk worklist",
-                   "Ranked by severity from Lakebase. Select a row for the detail. Account scoping is "
-                   "applied in this query: Unity Catalog will not put a row filter on a Lakebase copy.",
-                   worklist_body),
-        ui.section("Decision log", "Most recent decisions recorded in Lakebase.", html.Div(id="dec-log")),
-    ]
-    right = [
-        ui.section("", None, html.Div([
-            html.Div(id="detail-head"), dcc.Graph(id="forecast-graph", config={"displayModeBar": False}),
-            html.Div(id="forecast-note", className="small-note")])),
-        ui.section("Real-time check",
-                   "Re-forecast this series live on the real-time endpoint and compare it with the batch "
-                   "forecast above. Same model, two serving paths.",
-                   html.Div([
-                       dbc.Button("Re-forecast now", id="rt-btn", color="primary", outline=True, size="sm"),
-                       html.Span("  The first call after idle can take 1–2 minutes while the endpoint scales "
-                                 "up from zero (measured: 52 s and 138 s).", className="small-note ms-2"),
-                       dcc.Loading(html.Div(id="rt-out", className="mt-2"), type="circle")])),
-        ui.section("Agent",
-                   "Calls the live allocation agent. It reads Unity Catalog through tools and quotes the "
-                   "deterministic allocator; the request id links a decision back to the brief. After "
-                   "idle the first call can take 3–4 minutes while the endpoint scales up (measured: 217 s).",
-                   html.Div([
-                       dcc.Textarea(id="agent-q", style={"width": "100%", "height": "70px", "fontSize": "13px"}),
-                       dbc.Button("Ask the agent", id="agent-btn", color="primary", size="sm", className="mt-1"),
-                       dcc.Loading(html.Div(id="agent-out", className="mt-2"), type="circle")])),
-        ui.section("Decide", None, html.Div([
-            html.Div(id="dec-reco", className="hint"),
+    how_to = html.Div([
+        html.Div("How to use this page", className="how-title"),
+        html.Div([
+            html.Div([html.Div("1", className="step-n"), html.Div([
+                html.B("Pick a position. "),
+                "It opens here from the Executive tab (Review →). To choose another, select a row in the "
+                "worklist further down."], className="step-t")], className="step"),
+            html.Div([html.Div("2", className="step-n"), html.Div([
+                html.B("Ask the agent. "),
+                "Click Ask the agent. It reads live data and recommends how to split the available supply. "
+                "Allow about 30 seconds; the first answer after a quiet spell can take 3–4 minutes."],
+                className="step-t")], className="step"),
+            html.Div([html.Div("3", className="step-n"), html.Div([
+                html.B("Decide. "),
+                "Accept follows the recommendation. Override ships a different number and needs a reason. "
+                "Defer ships nothing this week. Then click Record decision."], className="step-t")],
+                className="step"),
+        ], className="steps"),
+    ], className="card-s how")
+
+    selected = html.Div([html.Div("Selected position", className="small-note"), html.Div(id="detail-head")],
+                        className="card-s selected")
+
+    agent_card = ui.section(
+        "Agent: get a recommendation",
+        "Click the button to ask the allocation agent. You can edit the question first. The table shows "
+        "what the allocator would ship to each account; the explanation below it is the agent's reasoning.",
+        html.Div([
+            dcc.Textarea(id="agent-q", style={"width": "100%", "height": "64px", "fontSize": "13px"}),
+            dbc.Button("Ask the agent", id="agent-btn", color="primary", size="sm", className="mt-1"),
+            dcc.Loading(html.Div(id="agent-out", className="mt-2"), type="circle")]))
+    decide_card = ui.section(
+        "Decide: record your decision",
+        html.Span(["The decision is saved with the agent's request id, so it can be traced to the advice "
+                   "you saw. ", html.B("Accept"), " = ship the recommended units. ", html.B("Override"),
+                   " = ship a different number and say why. ", html.B("Defer"), " = ship nothing this week."]),
+        html.Div([
+            html.Div(id="dec-reco", className="reco"),
             dbc.RadioItems(id="dec-action", inline=True, value="accept", className="mb-2",
                            options=[{"label": "Accept", "value": "accept"},
                                     {"label": "Override", "value": "override"},
                                     {"label": "Defer", "value": "defer"}], style={"fontSize": "13px"}),
             dbc.Row([
-                dbc.Col([html.Label("Units to ship", className="small-note"),
-                         dbc.Input(id="dec-units", type="number", min=0, step=1, size="sm")], width=4),
-                dbc.Col([html.Label("Rationale", className="small-note"),
+                dbc.Col([html.Label("Units to ship (for Override)", className="small-note"),
+                         dbc.Input(id="dec-units", type="number", min=0, step=1, size="sm")], width=5),
+                dbc.Col([html.Label("Reason (required for Override)", className="small-note"),
                          dbc.Input(id="dec-why", type="text", size="sm",
-                                   placeholder="why (required for an override)")], width=8),
+                                   placeholder="e.g. protect the line review")], width=7),
             ], className="mb-2"),
             dbc.Button("Record decision", id="dec-save", color="success", size="sm", disabled=True),
-            html.Div(id="dec-out", className="mt-2"), html.Div(id="dec-history", className="mt-2")])),
-    ]
-    return html.Div(dbc.Row([dbc.Col(left, lg=7), dbc.Col(right, lg=5)]))
+            html.Div(id="dec-out", className="mt-2"), html.Div(id="dec-history", className="mt-2")]))
+
+    forecast_card = ui.section(
+        "13-week forecast for this position",
+        "Expected (p50) and high-case (p90) demand per week; the dotted line is the projected stockout.",
+        html.Div([dcc.Graph(id="forecast-graph", config={"displayModeBar": False}),
+                  html.Div(id="forecast-note", className="small-note")]))
+    realtime_card = ui.section(
+        "Real-time check",
+        "Re-forecast this position live and compare it with the batch forecast. Same model, two serving paths.",
+        html.Div([
+            dbc.Button("Re-forecast now", id="rt-btn", color="primary", outline=True, size="sm"),
+            html.Span("  The first call after idle can take 1–2 minutes (measured: 52 s and 138 s).",
+                      className="small-note ms-2"),
+            dcc.Loading(html.Div(id="rt-out", className="mt-2"), type="circle")]))
+    worklist_card = ui.section(
+        "At-risk worklist",
+        "Ranked by severity from Lakebase. Select a row to load it above. Account scoping is applied in "
+        "this query: Unity Catalog will not put a row filter on a Lakebase copy.", worklist_body)
+    log_card = ui.section("Decision log", "Most recent decisions recorded in Lakebase.", html.Div(id="dec-log"))
+
+    return html.Div([
+        how_to, selected,
+        dbc.Row([dbc.Col(agent_card, lg=7), dbc.Col(decide_card, lg=5)]),
+        dbc.Row([dbc.Col([worklist_card, log_card], lg=7), dbc.Col([forecast_card, realtime_card], lg=5)]),
+    ])
 
 
 app.layout = html.Div([
-    dcc.Store(id="sel"), dcc.Store(id="agent-store"), dcc.Store(id="saved", data=0),
+    dcc.Store(id="sel"), dcc.Store(id="agent-store"), dcc.Store(id="saved", data=0), dcc.Store(id="resize-nudge"),
     dcc.Interval(id="tick", interval=60_000),
     header(),
     dbc.Container([
@@ -300,6 +332,16 @@ app.layout = html.Div([
                "written to Lakebase and synced back to Unity Catalog.", className="small-note mb-4"),
     ], fluid=True),
 ])
+
+
+# a chart drawn before the page finished laying out can be the wrong width; nudge a resize
+app.clientside_callback(
+    """function(tab, saved) {
+         [150, 600, 1500].forEach(function(ms) { setTimeout(function() { window.dispatchEvent(new Event('resize')); }, ms); });
+         return window.dash_clientside.no_update;
+       }""",
+    Output("resize-nudge", "data"), Input("tabs", "active_tab"), Input("saved", "data"),
+)
 
 
 # --------------------------------------------------------------------------
@@ -665,16 +707,15 @@ def agent(sel: dict | None, _n: int, question: str | None):
         out.append(alert([html.B(f"{len(r['tool_errors'])} tool call(s) failed. "),
                           "The answer below is not based on data. ", html.Br(),
                           html.Span(r["tool_errors"][0], className="mono")], "danger"))
-    out += [dcc.Markdown(r["answer"] or "(no answer)", className="answer"),
-            html.Div([html.Span(t, className="chip") for t in r["tools"]], className="mt-2")]
     alloc = r["allocation"]
     if alloc and alloc.get("claims"):
+        out.append(html.Div("Recommended allocation", className="sub-h"))
         out.append(dbc.Table([
             html.Thead(html.Tr([html.Th(c) for c in ("Account", "Needed", "Allocated", "Unmet", "Revenue protected")])),
             html.Tbody([html.Tr([html.Td(c["retailer_code"]), html.Td(num(c["units_needed"])),
                                  html.Td(num(c["units_allocated"])), html.Td(num(c["units_unmet"])),
                                  html.Td(money(c["revenue_protected_usd"]))]) for c in alloc["claims"]])],
-            size="sm", className="mt-2 mb-1", style={"fontSize": "12.5px"}))
+            size="sm", className="mb-1", style={"fontSize": "12.5px"}))
         out.append(html.Div(f"Allocator: {num(alloc.get('total_units_allocated'))} of "
                             f"{num(alloc.get('supply_available_units'))} available units placed"
                             + (" (supply constrained)" if alloc.get("is_constrained") else ""),
@@ -682,6 +723,10 @@ def agent(sel: dict | None, _n: int, question: str | None):
     else:
         out.append(html.Div("This answer did not include an allocation. Ask for a recommendation to "
                             "record a decision.", className="small-note"))
+    out.append(html.Div("Agent's explanation", className="sub-h mt-2"))
+    out.append(dcc.Markdown(r["answer"] or "(no answer)", className="answer scroll"))
+    out.append(html.Div([html.Span("Tools used: ", className="small-note"),
+                         *[html.Span(t, className="chip") for t in r["tools"]]], className="mt-2"))
     out.append(html.Div(f"request id {r['request_id']} · {r['llm_endpoint']} · "
                         f"{num(r['input_tokens'])} in / {num(r['output_tokens'])} out tokens · "
                         f"{r['latency_ms'] / 1000:.1f}s", className="meta mono mt-1"))

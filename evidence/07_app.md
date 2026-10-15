@@ -43,9 +43,14 @@ at-risk demand is served from**, with a matching table; and the already-incurred
 
 ![Forecast and decide](screens/app_decide.png)
 
-The ranked worklist (filter by tier and licence family, sort, **export CSV**), a SKU card with its
-image and facts, the 13-week p50/p90 forecast with the stockout week marked, the **real-time check**
-(live endpoint against the batch forecast), the **agent**, the **decision form**, and the decision log.
+Laid out in the order a person works. A **"How to use this page"** strip gives three plain steps
+(pick a position, ask the agent, decide). Below it the **selected position** (image and facts), then
+**Agent** and **Decide** side by side at the top: the agent leads with the allocation table (what
+would ship to each account) and puts its longer reasoning in a scrolling box; the decide card
+explains Accept, Override and Defer in one line each and labels the fields ("Units to ship (for
+Override)", "Reason (required for Override)"). Underneath: the ranked worklist (filter by tier and
+licence family, sort, export CSV), the 13-week forecast with the stockout week marked, the real-time
+check, and the decision log.
 
 ## 2. Design decisions
 

@@ -117,3 +117,28 @@ a:focus, button:focus-visible, input:focus-visible { outline: 3px solid #9ec5f4;
   body { background: #fff; } .card-s, .k-card, .hero { box-shadow: none; break-inside: avoid; }
   .hero { color: #000; background: #fff; border: 1px solid #999; } .hero .lede, .hm .l, .hm .s, .hero .eyebrow { color: #333; }
 }
+
+/* ---------- how-to strip, selected position, agent/decide ---------- */
+.how { background: linear-gradient(120deg, #f4f8fe 0%, #ffffff 70%); border-color: #cfe0f7; }
+.how-title { font-weight: 700; font-size: 14px; margin-bottom: 8px; color: var(--navy); }
+.steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+@media (max-width: 900px) { .steps { grid-template-columns: 1fr; } }
+.step { display: flex; gap: 10px; align-items: flex-start; }
+.step-n { flex: none; width: 26px; height: 26px; border-radius: 50%; background: var(--navy); color: #fff;
+          display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; }
+.step-t { font-size: 13.5px; color: var(--text-secondary); line-height: 1.4; }
+.step-t b { color: var(--text-primary); }
+.selected { padding: 14px 18px; }
+.selected .sku-head { margin-bottom: 0; }
+.reco { font-size: 15px; font-weight: 650; margin-bottom: 8px; }
+.sub-h { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-secondary);
+         margin-bottom: 4px; }
+.answer.scroll { max-height: 300px; overflow-y: auto; }
+
+/* Plotly sizes a chart in pixels when it first draws. If a scrollbar appears afterwards the chart
+   keeps its old width and pushes the column past the window edge. Never let a chart exceed its
+   container, and clip (not scroll) horizontal overflow on cards. */
+.dash-graph, .js-plotly-plot, .plot-container, .svg-container, .main-svg { max-width: 100% !important; }
+.card-s, .k-card, .hero, .pcard { overflow-x: clip; }
+.app-header { overflow-x: clip; }
+html, body { max-width: 100%; overflow-x: hidden; }

@@ -215,8 +215,8 @@ notebook with a failing cell; end messages with
 Built, deployed and verified (`evidence/07_app.md`): an executive tab (computed headline, attention
 list, Genie with six proven questions, top exposures with generated art), a performance tab (KPI
 cards, trends, commitment dumbbell, accuracy by family, tier chart, a DC exposure **map**, business
-cost), and a forecast-and-decide tab (worklist with filters and CSV export, SKU card, forecast,
-real-time check, agent, decision, decision log). Open items, none blocking:
+cost), and a forecast-and-decide tab (a how-to strip, the selected position, Agent and Decide side by side
+on top, then the worklist with filters and CSV export, forecast, real-time check, decision log). Open items, none blocking:
 
 - **The deployed UI was never clicked through in a browser** — workspace SSO blocked the
   automation. Open the URL once and try: Executive → Review → Ask the agent → Record decision.
@@ -406,6 +406,11 @@ endpoint that shipped for a week unable to read any data (§6 #39).
     empty selection or the two will fight.
 54. `chrome-devtools` full-page screenshots repeat a sticky header; set it `position: static` for
     the capture. The viewport screenshot height is capped, so use full page for long tabs.
+56. **A chart can push its column past the window edge.** Plotly fixes a chart's pixel width when it
+    first draws; if a scrollbar then appears the chart keeps the old width. The CSS now caps graphs
+    at their container and clips horizontal overflow on cards, and a clientside callback fires a
+    window `resize` after tab changes. A user reported a clipped right edge that could not be
+    reproduced (DOM geometry was correct); if it recurs, ask for the window width and browser zoom.
 55. **Look at every chart before shipping it.** A clipped label, a blank map and a false "OK" chip were
     all invisible in code and obvious in a screenshot.
 
