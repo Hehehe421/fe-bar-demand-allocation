@@ -267,7 +267,40 @@ also registers two further `demand_forecaster` versions and moves the
 `@champion` / `@challenger` aliases, so it is worth batching with other Stage C1
 work rather than doing for a comment alone.
 
-## Read `databricks-ml-training` FIRST — it corrects the plan below
+## DECIDED 2026-10-14: standard feature store, not Feature Views
+
+Use the **`FeatureLookup` flavour** (`fe.create_table` + `FeatureLookup`), which
+is what Stage C1 already built. The skill presents both flavours as current —
+feature tables are not retired, they are the flavour for when *you* own the
+feature computation. Feature Views are for when a feature is a formula you want
+Databricks to keep fresh, and the window-aggregation machinery that makes them
+worthwhile is overkill here.
+
+So **step 2 is now largely REUSE**, with two changes:
+
+1. **Drop the point-in-time plumbing.** Remove `timeseries_columns` from
+   `create_table` and `timestamp_lookup_key` from `FeatureLookup`.
+   *Why this is safe:* point-in-time correctness and the online store are
+   orthogonal — the former prevents label leakage at training time, the latter
+   is about serving latency. The protection here comes from the frame, not the
+   feature layer: features are computed at the origin week and the label is
+   taken from origin+h, with a single-origin holdout. The timestamp lookup was
+   belt-and-braces on top of that. **If anyone changes how the frame is built,
+   that safety disappears with it** — the leakage guard is in
+   `03_demand_forecast` §4, not in the feature store.
+2. **Switch batch scoring to `fe.score_batch()`.** This is the substantive fix.
+   Stage C1 currently rebuilds all 35 feature columns by hand to feed `predict`,
+   which is the training/serving skew the feature layer exists to prevent.
+   `score_batch` takes keys only and joins features from the model's registered
+   lineage. Requires the model to be logged with
+   `fe.log_model(training_set=...)`, which it already is.
+
+No online store, no `publish_table`, no feature serving endpoint.
+
+Read `references/feature-store.md` in the `databricks-ml-training` skill for the
+FeatureLookup flavour, and `databricks-model-serving` for step 4's endpoint work.
+
+## Superseded: the Feature View notes below
 
 The `databricks-ml-training` skill (and its
 `references/feature-views.md`) covers this exact API. §10 of the original brief
