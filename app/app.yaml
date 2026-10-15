@@ -1,0 +1,25 @@
+# Rendered by app/deploy.py from src/config.py. Edit the config, not this file.
+command: ["python", "app.py"]
+
+env:
+  # resources: the platform injects these, nothing is hardcoded
+  - name: DATABRICKS_WAREHOUSE_ID
+    valueFrom: sql-warehouse
+  - name: AGENT_ENDPOINT
+    valueFrom: agent-endpoint
+  - name: FORECASTER_ENDPOINT
+    valueFrom: forecaster-endpoint
+  - name: GENIE_SPACE_ID
+    valueFrom: genie-space
+  # Lakebase coordinates (not secrets; the credential is minted at runtime)
+  - name: PG_HOST
+    value: "ep-empty-butterfly-d2dihd0i.database.us-east-1.cloud.databricks.com"
+  - name: PG_DATABASE
+    value: "databricks_postgres"
+  - name: PG_ENDPOINT
+    value: "projects/toy-demand-alloc/branches/production/endpoints/primary"
+  - name: UC_CATALOG
+    value: "toy_demand_allocation"
+  # wake the scale-to-zero forecaster at start-up (it takes minutes to come up)
+  - name: WARMUP
+    value: "1"

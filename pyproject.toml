@@ -34,3 +34,6 @@ select = ["E", "F", "I", "UP", "B"]
 # restart that it requires, so module-level imports legitimately do not sit at
 # the top of the file.
 "notebooks/*.py" = ["E402"]
+# UI copy in the app is written as readable sentences; wrapping them mid-phrase hurts
+# more than a long line does.
+"app/*.py" = ["E501"]

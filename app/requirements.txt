@@ -1,0 +1,6 @@
+# Dash 2.18.1, databricks-sdk and Flask are pre-installed in the Apps runtime.
+# psycopg is NOT; a missing Postgres driver is the most common cause of a Lakebase
+# app crashing on start.
+dash-bootstrap-components>=1.6
+psycopg[binary]>=3.2
+databricks-sdk>=0.40

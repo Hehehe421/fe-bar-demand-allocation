@@ -1,0 +1,52 @@
+/* Allocation Command Center. Light theme only (a deliberate scope decision: the chart
+   palette is validated for the light surface; dark would need its own selected steps). */
+:root {
+  --surface-1: #fcfcfb; --surface-2: #f4f3f0; --line: #e4e3de;
+  --text-primary: #0b0b0b; --text-secondary: #52514e; --text-muted: #7a7973;
+  --series-1: #2a78d6; --series-2: #eb6834;
+  --good: #0ca30c; --warning: #fab219; --serious: #ec835a; --critical: #d03b3b;
+}
+body { background: var(--surface-2); color: var(--text-primary);
+       font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+.app-header { background: var(--surface-1); border-bottom: 1px solid var(--line);
+              padding: 14px 24px; position: sticky; top: 0; z-index: 10; }
+.app-title { font-size: 20px; font-weight: 650; margin: 0; }
+.app-sub { color: var(--text-secondary); font-size: 13px; margin: 0; }
+.card-s { background: var(--surface-1); border: 1px solid var(--line); border-radius: 10px;
+          padding: 16px 18px; margin-bottom: 16px; }
+.card-s h2 { font-size: 15px; font-weight: 650; margin: 0 0 2px 0; }
+.card-s .hint { color: var(--text-secondary); font-size: 12.5px; margin-bottom: 10px; }
+.kpi { background: var(--surface-1); border: 1px solid var(--line); border-radius: 10px;
+       padding: 12px 14px; height: 100%; }
+.kpi .label { color: var(--text-secondary); font-size: 12px; text-transform: uppercase;
+              letter-spacing: .04em; }
+.kpi .value { font-size: 28px; font-weight: 650; line-height: 1.15; margin-top: 2px;
+              font-variant-numeric: tabular-nums; }
+.kpi .sub { color: var(--text-secondary); font-size: 12px; margin-top: 2px; }
+.kpi .sub b { color: var(--text-primary); }
+.tier { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; font-size: 12.5px; }
+.tier .g { font-size: 13px; }
+.t-CRITICAL .g { color: var(--critical); } .t-HIGH .g { color: var(--serious); }
+.t-MEDIUM .g { color: var(--warning); }   .t-LOW .g { color: var(--good); }
+.fact { font-size: 12.5px; color: var(--text-secondary); }
+.fact b { color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.answer { white-space: pre-wrap; font-size: 14px; line-height: 1.5; background: var(--surface-2);
+          border-radius: 8px; padding: 10px 12px; }
+.chip { display: inline-block; background: var(--surface-2); border: 1px solid var(--line);
+        border-radius: 999px; padding: 1px 9px; font-size: 12px; margin: 0 6px 4px 0;
+        color: var(--text-secondary); }
+.meta { color: var(--text-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+pre.sql { background: var(--surface-2); border-radius: 8px; padding: 10px 12px; font-size: 12px;
+          overflow-x: auto; margin: 6px 0; }
+.small-note { color: var(--text-muted); font-size: 12px; }
+.dash-spreadsheet-container .dash-spreadsheet-inner td { font-variant-numeric: tabular-nums; }
+
+/* let flex children shrink; otherwise a nowrap table forces horizontal page scroll */
+.row > [class*="col-"] { min-width: 0; }
+.dash-table-container { overflow-x: auto; }
+
+.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner td,
+.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner th,
+.dash-table-container .dash-cell-value, .dash-table-container input {
+  font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important; }
