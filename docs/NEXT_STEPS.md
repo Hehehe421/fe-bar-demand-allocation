@@ -267,7 +267,36 @@ also registers two further `demand_forecaster` versions and moves the
 `@champion` / `@challenger` aliases, so it is worth batching with other Stage C1
 work rather than doing for a comment alone.
 
-## Step 2 — Feature View: API fully mapped, ready to build
+## Read `databricks-ml-training` FIRST — it corrects the plan below
+
+The `databricks-ml-training` skill (and its
+`references/feature-views.md`) covers this exact API. §10 of the original brief
+named it; I did not invoke it and hand-probed the API instead, which cost
+several cycles and still left two things wrong. Four corrections it supplies:
+
+1. **Declare the rolling features, do not hand-compute them.** Feature Views
+   support `RollingWindow` / `SlidingWindow` / `TumblingWindow` aggregations.
+   The plan below proposed computing lag/rolling columns in the source's
+   `transformation_sql` — that is the FeatureLookup habit. The whole point of a
+   Feature View is that the rolling mean is a *formula Databricks keeps fresh*.
+   The 11 rolling/lag features should be window aggregations, not SQL.
+2. **`fe.score_batch()` replaces `spark_udf` for feature-backed models.** If the
+   model is logged with `fe.log_model(training_set=...)`, batch scoring takes
+   keys only and auto-joins features from the model's registered lineage.
+   Stage C1's batch path currently rebuilds all 35 feature columns by hand to
+   feed `predict`; that is the training/serving skew the feature layer exists to
+   prevent, and `score_batch` is how step 4 should score.
+3. **`env_manager="local"`** on `spark_udf` when training and scoring share a
+   runtime, or it rebuilds a virtualenv per call.
+4. **Feature Views are Public Preview and need `>=0.16.0`.** Consistent with the
+   0.18.1 finding below.
+
+The skill also cautions against Feature Engineering unless a specific reason
+applies. Here one does, explicitly: point-in-time joins against labels so the
+forecast cannot see the future. That is worth stating in the notebook, because
+it is the reason a reviewer should accept the extra layer.
+
+## Step 2 — Feature View: API mapped by probing (cross-check against the skill)
 
 Pre-flight is done. Everything below was verified by probing the live cluster,
 so `03b_feature_view.py` can be written straight against it.
