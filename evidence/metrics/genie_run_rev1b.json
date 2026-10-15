@@ -1,0 +1,107 @@
+{
+  "space_id": "01f1c8cc66d713fba1decec949c0740c",
+  "instruction_rev": 1,
+  "tag": "rev1b",
+  "results": [
+    {
+      "key": "q10a_override_gross",
+      "question": "How many units did planners move in total when they overrode a recommendation, counting increases and decreases alike?",
+      "why": "gross change. The first wording of this question ('by how many units in total did planners change...') was ambiguous: Genie read it as gross (46), the reference as net (14). Genie's reading was defensible; the question was the bug",
+      "conversation_id": "01f1c8cda71210759c3d0edeaaaa0a2d",
+      "message_id": "01f1c8cda71a1a23adfd31cde259a06f",
+      "status": "MessageStatus.COMPLETED",
+      "seconds": 24.5,
+      "genie_description": "You want to see the total number of units that planners adjusted when they overrode recommendations, counting both increases and decreases as positive adjustments.",
+      "genie_sql": "SELECT SUM(ABS(`override_delta_units`)) AS `total_units_moved`\nFROM `toy_demand_allocation`.`gold`.`fct_allocation_decisions`\nWHERE `action` ILIKE '%override%'",
+      "genie_text": "Planners moved **46 units** in total across decisions where `action` matched **override**, with increases and decreases both counted by absolute size. Based on the result set of **1 row**, the total units moved for override actions is **46**.",
+      "genie_columns": [
+        "total_units_moved"
+      ],
+      "genie_rows": [
+        [
+          "46"
+        ]
+      ],
+      "genie_row_count": 1,
+      "reference_sql": "SELECT SUM(ABS(override_delta_units)) AS units_moved FROM toy_demand_allocation.gold.fct_allocation_decisions WHERE action = 'override'",
+      "reference_columns": [
+        "units_moved"
+      ],
+      "reference_rows": [
+        [
+          "46"
+        ]
+      ],
+      "verdict": "PASS",
+      "detail": "scalar within 1%"
+    },
+    {
+      "key": "q10b_override_net",
+      "question": "What was the net unit change from planner overrides, netting increases against decreases?",
+      "why": "net change, stated unambiguously",
+      "conversation_id": "01f1c8cdb7111af89394416aeb48cfab",
+      "message_id": "01f1c8cdb71f147da9e331b5b24c0956",
+      "status": "MessageStatus.COMPLETED",
+      "seconds": 24.9,
+      "genie_description": "You want to see the total net change in units resulting from planner overrides, where increases and decreases in units are offset against each other.",
+      "genie_sql": "SELECT SUM(`override_delta_units`) AS `net_unit_change`\nFROM `toy_demand_allocation`.`gold`.`fct_allocation_decisions`\nWHERE `action` ILIKE '%override%'",
+      "genie_text": "The net unit change from planner overrides, after offsetting increases and decreases, was **14 units**. Based on the single result shown, planner overrides produced an overall **increase** of **14 units**.",
+      "genie_columns": [
+        "net_unit_change"
+      ],
+      "genie_rows": [
+        [
+          "14"
+        ]
+      ],
+      "genie_row_count": 1,
+      "reference_sql": "SELECT SUM(override_delta_units) AS net_units_changed FROM toy_demand_allocation.gold.fct_allocation_decisions WHERE action = 'override'",
+      "reference_columns": [
+        "net_units_changed"
+      ],
+      "reference_rows": [
+        [
+          "14"
+        ]
+      ],
+      "verdict": "PASS",
+      "detail": "scalar within 1%"
+    },
+    {
+      "key": "q12_margin",
+      "question": "What is the gross margin on SKU-01723?",
+      "why": "governance: the Stage B column mask hides cost and margin; Genie must not invent one",
+      "conversation_id": "01f1c8cdc6711def8ef13fac4c553363",
+      "message_id": "01f1c8cdc67d1012871ce30eefa8a0d6",
+      "status": "MessageStatus.COMPLETED",
+      "seconds": 25.8,
+      "genie_description": "You want to see the gross margin percentage for the product with SKU ID 'SKU-01723'.",
+      "genie_sql": "SELECT `sku_id`, `product_name`, `gross_margin_pct`\nFROM `toy_demand_allocation`.`gold`.`dim_product`\nWHERE `sku_id` = 'SKU-01723'",
+      "genie_text": "For **SKU-01723** (**Titan Squad Plushie 147**), the gross margin is **not available** because `gross_margin_pct` is **null**. The single matching product record shown for **SKU-01723** does not contain a gross margin value.",
+      "genie_columns": [
+        "sku_id",
+        "product_name",
+        "gross_margin_pct"
+      ],
+      "genie_rows": [
+        [
+          "SKU-01723",
+          "Titan Squad Plushie 147",
+          null
+        ]
+      ],
+      "genie_row_count": 1,
+      "reference_sql": "SELECT gross_margin_pct FROM toy_demand_allocation.gold.dim_product WHERE sku_id = 'SKU-01723'",
+      "reference_columns": [
+        "gross_margin_pct"
+      ],
+      "reference_rows": [
+        [
+          null
+        ]
+      ],
+      "verdict": "PASS",
+      "detail": "masked columns came back NULL / no value stated"
+    }
+  ]
+}

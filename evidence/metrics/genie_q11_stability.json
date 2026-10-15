@@ -1,0 +1,132 @@
+{
+  "rev2": [
+    {
+      "verdict": "PASS",
+      "used_fct_demand_forecast": true,
+      "detail": "every reference row found, same row count",
+      "genie_sql": "SELECT dim_product.brand AS brand,\n       SUM(fct_demand_forecast.forecast_p50) AS total_13w_p50_forecast_demand\nFROM toy_demand_allocation.gold.fct_demand_forecast AS fct_demand_forecast\nJOIN toy_demand_allocation.gold.dim_product AS dim_product\n  ON fct_demand_forecast.sku_id = dim_product.sku_id\nWHERE fct_demand_forecast.horizon BETWEEN 1 AND 13\n  AND dim_product.brand IS NOT NULL\nGROUP BY dim_product.brand\nORDER BY total_13w_p50_forecast_demand DESC"
+    },
+    {
+      "verdict": "PASS",
+      "used_fct_demand_forecast": true,
+      "detail": "every reference row found, same row count",
+      "genie_sql": "SELECT dp.brand AS brand, SUM(fdf.forecast_p50) AS total_p50_13w\nFROM toy_demand_allocation.gold.fct_demand_forecast fdf\nJOIN toy_demand_allocation.gold.dim_product dp\n  ON fdf.sku_id = dp.sku_id\nWHERE fdf.horizon BETWEEN 1 AND 13\n  AND dp.brand IS NOT NULL\nGROUP BY dp.brand\nORDER BY total_p50_13w DESC"
+    },
+    {
+      "verdict": "PASS",
+      "used_fct_demand_forecast": true,
+      "detail": "every reference row found, same row count",
+      "genie_sql": "SELECT\n  `dim_product`.`brand` AS `brand`,\n  SUM(`fct_demand_forecast`.`forecast_p50`) AS `total_13w_p50_forecast_demand`\nFROM `toy_demand_allocation`.`gold`.`fct_demand_forecast` AS `fct_demand_forecast`\nINNER JOIN `toy_demand_allocation`.`gold`.`dim_product` AS `dim_product`\n  ON `fct_demand_forecast`.`sku_id` = `dim_product`.`sku_id`\nWHERE `fct_demand_forecast`.`horizon` BETWEEN 1 AND 13\n  AND `dim_product`.`brand` IS NOT NULL\n  AND `fct_demand_forecast`.`forecast_p50` IS NOT NULL\nGROUP BY `dim_product`.`brand`\nORDER BY `total_13w_p50_forecast_demand` DESC"
+    },
+    {
+      "verdict": "PASS",
+      "used_fct_demand_forecast": true,
+      "detail": "every reference row found, same row count",
+      "genie_sql": "SELECT dim_product.brand AS brand, SUM(fct_demand_forecast.forecast_p50) AS total_13w_p50_forecast_demand\nFROM toy_demand_allocation.gold.fct_demand_forecast AS fct_demand_forecast\nINNER JOIN toy_demand_allocation.gold.dim_product AS dim_product\n  ON fct_demand_forecast.sku_id = dim_product.sku_id\nWHERE dim_product.brand IS NOT NULL\n  AND fct_demand_forecast.forecast_p50 IS NOT NULL\n  AND fct_demand_forecast.horizon BETWEEN 1 AND 13\nGROUP BY dim_product.brand\nORDER BY total_13w_p50_forecast_demand DESC"
+    },
+    {
+      "verdict": "PASS",
+      "used_fct_demand_forecast": true,
+      "detail": "every reference row found, same row count",
+      "genie_sql": "SELECT\n  `dim_product`.`brand` AS `brand`,\n  SUM(`fct_demand_forecast`.`forecast_p50`) AS `total_13w_p50_forecast_demand`\nFROM `toy_demand_allocation`.`gold`.`fct_demand_forecast` AS `fct_demand_forecast`\nINNER JOIN `toy_demand_allocation`.`gold`.`dim_product` AS `dim_product`\n  ON `fct_demand_forecast`.`sku_id` = `dim_product`.`sku_id`\nWHERE `dim_product`.`brand` IS NOT NULL\n  AND `fct_demand_forecast`.`forecast_p50` IS NOT NULL\nGROUP BY `dim_product`.`brand`\nORDER BY `total_13w_p50_forecast_demand` DESC"
+    },
+    {
+      "verdict": "PASS",
+      "used_fct_demand_forecast": true,
+      "detail": "every reference row found, same row count",
+      "genie_sql": "WITH latest_origin AS (\n  SELECT MAX(fct_demand_forecast.origin_week) AS origin_week\n  FROM toy_demand_allocation.gold.fct_demand_forecast\n  WHERE fct_demand_forecast.origin_week IS NOT NULL\n)\nSELECT dim_product.brand AS brand,\n  SUM(fct_demand_forecast.forecast_p50) AS total_13w_p50_forecast_demand\nFROM toy_demand_allocation.gold.fct_demand_forecast AS fct_demand_forecast\nINNER JOIN toy_demand_allocation.gold.dim_product AS dim_product\n  ON fct_demand_forecast.sku_id = dim_product.sku_id\nCROSS JOIN latest_origin\nWHERE dim_product.brand IS NOT NULL\n  AND fct_demand_forecast.origin_week = latest_origin.origin_week\n  AND fct_demand_forecast.horizon IS NOT NULL\n  AND fct_demand_forecast.horizon BETWEEN 1 AND 13\nGROUP BY ALL\nORDER BY total_13w_p50_forecast_demand DESC"
+    },
+    {
+      "verdict": "PASS",
+      "used_fct_demand_forecast": true,
+      "detail": "every reference row found, same row count",
+      "genie_sql": "WITH `forecast_13w` AS (\n  SELECT\n    `fct_demand_forecast`.`sku_id`,\n    `fct_demand_forecast`.`retailer_code`,\n    `fct_demand_forecast`.`origin_week`,\n    SUM(`fct_demand_forecast`.`forecast_p50`) AS `forecast_p50_13w`\n  FROM `toy_demand_allocation`.`gold`.`fct_demand_forecast` AS `fct_demand_forecast`\n  WHERE `fct_demand_forecast`.`horizon` BETWEEN 1 AND 13\n    AND `fct_demand_forecast`.`forecast_p50` IS NOT NULL\n  GROUP BY\n    `fct_demand_forecast`.`sku_id`,\n    `fct_demand_forecast`.`retailer_code`,\n    `fct_demand_forecast`.`origin_week`\n)\nSELECT\n  `dim_product`.`brand`,\n  SUM(`forecast_13w`.`forecast_p50_13w`) AS `total_forecast_p50_13w`\nFROM `forecast_13w`\nINNER JOIN `toy_demand_allocation`.`gold`.`dim_product` AS `dim_product`\n  ON `forecast_13w`.`sku_id` = `dim_product`.`sku_id`\nWHERE `dim_product`.`brand` IS NOT NULL\nGROUP BY `dim_product`.`brand`\nORDER BY `total_forecast_p50_13w` DESC"
+    },
+    {
+      "verdict": "PASS",
+      "used_fct_demand_forecast": true,
+      "detail": "every reference row found, same row count",
+      "genie_sql": "SELECT `dim_product`.`brand` AS `brand`, SUM(`fct_demand_forecast`.`forecast_p50`) AS `total_13w_p50_forecast_demand` FROM `toy_demand_allocation`.`gold`.`fct_demand_forecast` AS `fct_demand_forecast` INNER JOIN `toy_demand_allocation`.`gold`.`dim_product` AS `dim_product` ON `fct_demand_forecast`.`sku_id` = `dim_product`.`sku_id` WHERE `dim_product`.`brand` IS NOT NULL GROUP BY `dim_product`.`brand` ORDER BY `total_13w_p50_forecast_demand` DESC"
+    },
+    {
+      "verdict": "PASS",
+      "used_fct_demand_forecast": true,
+      "detail": "every reference row found, same row count",
+      "genie_sql": "WITH latest_origin AS (\n  SELECT MAX(fct_demand_forecast.origin_week) AS origin_week\n  FROM toy_demand_allocation.gold.fct_demand_forecast AS fct_demand_forecast\n)\nSELECT \n  dim_product.brand AS brand,\n  SUM(fct_demand_forecast.forecast_p50) AS total_13w_p50_forecast_demand\nFROM toy_demand_allocation.gold.fct_demand_forecast AS fct_demand_forecast\nINNER JOIN latest_origin\n  ON fct_demand_forecast.origin_week = latest_origin.origin_week\nINNER JOIN toy_demand_allocation.gold.dim_product AS dim_product\n  ON fct_demand_forecast.sku_id = dim_product.sku_id\nWHERE dim_product.brand IS NOT NULL\n  AND fct_demand_forecast.horizon BETWEEN 1 AND 13\nGROUP BY dim_product.brand\nORDER BY total_13w_p50_forecast_demand DESC"
+    },
+    {
+      "verdict": "PASS",
+      "used_fct_demand_forecast": true,
+      "detail": "every reference row found, same row count",
+      "genie_sql": "SELECT\n  dp.brand AS brand,\n  SUM(fdf.forecast_p50) AS total_p50_demand_13w\nFROM toy_demand_allocation.gold.fct_demand_forecast fdf\nJOIN toy_demand_allocation.gold.dim_product dp\n  ON fdf.sku_id = dp.sku_id\nWHERE fdf.horizon BETWEEN 1 AND 13\n  AND dp.brand IS NOT NULL\nGROUP BY dp.brand\nORDER BY total_p50_demand_13w DESC"
+    },
+    {
+      "verdict": "PASS",
+      "used_fct_demand_forecast": true,
+      "detail": "every reference row found, same row count",
+      "genie_sql": "SELECT dp.brand AS brand,\n       SUM(fdf.forecast_p50) AS total_p50_demand_13w\nFROM toy_demand_allocation.gold.fct_demand_forecast fdf\nJOIN toy_demand_allocation.gold.dim_product dp\n  ON fdf.sku_id = dp.sku_id\nWHERE dp.brand IS NOT NULL\n  AND fdf.horizon BETWEEN 1 AND 13\nGROUP BY dp.brand\nORDER BY total_p50_demand_13w DESC"
+    },
+    {
+      "verdict": "PASS",
+      "used_fct_demand_forecast": true,
+      "detail": "every reference row found, same row count",
+      "genie_sql": "SELECT dim_product.brand AS brand, SUM(fct_demand_forecast.forecast_p50) AS total_13w_forecast_p50\nFROM toy_demand_allocation.gold.fct_demand_forecast AS fct_demand_forecast\nINNER JOIN toy_demand_allocation.gold.dim_product AS dim_product\n  ON fct_demand_forecast.sku_id = dim_product.sku_id\nWHERE dim_product.brand IS NOT NULL\n  AND fct_demand_forecast.horizon BETWEEN 1 AND 13\nGROUP BY dim_product.brand\nORDER BY total_13w_forecast_p50 DESC"
+    }
+  ],
+  "rev1": [
+    {
+      "verdict": "PASS",
+      "used_fct_demand_forecast": true,
+      "detail": "every reference row found, same row count",
+      "genie_sql": "SELECT\n  `dim_product`.`brand` AS `brand`,\n  SUM(`fct_demand_forecast`.`forecast_p50`) AS `total_13w_p50_forecast_demand`\nFROM `toy_demand_allocation`.`gold`.`fct_demand_forecast` AS `fct_demand_forecast`\nINNER JOIN `toy_demand_allocation`.`gold`.`dim_product` AS `dim_product`\n  ON `fct_demand_forecast`.`sku_id` = `dim_product`.`sku_id`\nWHERE `dim_product`.`brand` IS NOT NULL\n  AND `fct_demand_forecast`.`forecast_p50` IS NOT NULL\nGROUP BY `dim_product`.`brand`\nORDER BY `total_13w_p50_forecast_demand` DESC"
+    },
+    {
+      "verdict": "PASS",
+      "used_fct_demand_forecast": true,
+      "detail": "every reference row found, same row count",
+      "genie_sql": "WITH `latest_origin` AS (\n  SELECT MAX(`origin_week`) AS `origin_week`\n  FROM `toy_demand_allocation`.`gold`.`fct_demand_forecast`\n)\nSELECT\n  `dim_product`.`brand` AS `brand`,\n  SUM(`fct_demand_forecast`.`forecast_p50`) AS `total_13w_p50_forecast_demand`\nFROM `toy_demand_allocation`.`gold`.`fct_demand_forecast`\nINNER JOIN `latest_origin`\n  ON `fct_demand_forecast`.`origin_week` = `latest_origin`.`origin_week`\nINNER JOIN `toy_demand_allocation`.`gold`.`dim_product`\n  ON `fct_demand_forecast`.`sku_id` = `dim_product`.`sku_id`\nWHERE `dim_product`.`brand` IS NOT NULL\nGROUP BY `dim_product`.`brand`\nORDER BY `total_13w_p50_forecast_demand` DESC"
+    },
+    {
+      "verdict": "PASS",
+      "used_fct_demand_forecast": true,
+      "detail": "every reference row found, same row count",
+      "genie_sql": "SELECT\n  `dim_product`.`brand` AS `brand`,\n  SUM(`fct_demand_forecast`.`forecast_p50`) AS `total_13w_p50_forecast_demand`\nFROM `toy_demand_allocation`.`gold`.`fct_demand_forecast` AS `fct_demand_forecast`\nINNER JOIN `toy_demand_allocation`.`gold`.`dim_product` AS `dim_product`\n  ON `fct_demand_forecast`.`sku_id` = `dim_product`.`sku_id`\nWHERE `dim_product`.`brand` IS NOT NULL\nGROUP BY `dim_product`.`brand`\nORDER BY `total_13w_p50_forecast_demand` DESC"
+    },
+    {
+      "verdict": "FAIL",
+      "used_fct_demand_forecast": false,
+      "detail": "reference row ['Glowberry Pets', '911952.0'] not found in Genie's rows",
+      "genie_sql": "SELECT brand, SUM(forecast_p50_13w) AS total_p50_13w_demand\nFROM toy_demand_allocation.gold.fct_stockout_risk\nWHERE brand IS NOT NULL\nGROUP BY brand\nORDER BY total_p50_13w_demand DESC"
+    },
+    {
+      "verdict": "PASS",
+      "used_fct_demand_forecast": true,
+      "detail": "every reference row found, same row count",
+      "genie_sql": "SELECT dim_product.brand AS brand, SUM(fct_demand_forecast.forecast_p50) AS total_13w_p50_forecast_demand\nFROM toy_demand_allocation.gold.fct_demand_forecast AS fct_demand_forecast\nINNER JOIN toy_demand_allocation.gold.dim_product AS dim_product\n  ON fct_demand_forecast.sku_id = dim_product.sku_id\nWHERE dim_product.brand IS NOT NULL\n  AND fct_demand_forecast.forecast_p50 IS NOT NULL\n  AND fct_demand_forecast.horizon BETWEEN 1 AND 13\nGROUP BY dim_product.brand\nORDER BY total_13w_p50_forecast_demand DESC"
+    },
+    {
+      "verdict": "PASS",
+      "used_fct_demand_forecast": true,
+      "detail": "every reference row found, same row count",
+      "genie_sql": "SELECT\n  `dim_product`.`brand` AS `brand`,\n  SUM(`fct_demand_forecast`.`forecast_p50`) AS `total_13w_p50_forecast_demand`\nFROM `toy_demand_allocation`.`gold`.`fct_demand_forecast` AS `fct_demand_forecast`\nINNER JOIN `toy_demand_allocation`.`gold`.`dim_product` AS `dim_product`\n  ON `fct_demand_forecast`.`sku_id` = `dim_product`.`sku_id`\nWHERE `dim_product`.`brand` IS NOT NULL\nGROUP BY `dim_product`.`brand`\nORDER BY `total_13w_p50_forecast_demand` DESC"
+    },
+    {
+      "verdict": "FAIL",
+      "used_fct_demand_forecast": false,
+      "detail": "reference row ['Glowberry Pets', '911952.0'] not found in Genie's rows",
+      "genie_sql": "SELECT brand, SUM(forecast_p50_13w) AS total_p50_13w_demand\nFROM toy_demand_allocation.gold.fct_stockout_risk\nWHERE brand IS NOT NULL\nGROUP BY brand\nORDER BY total_p50_13w_demand DESC"
+    },
+    {
+      "verdict": "PASS",
+      "used_fct_demand_forecast": true,
+      "detail": "every reference row found, same row count",
+      "genie_sql": "SELECT\n  `dim_product`.`brand` AS `brand`,\n  SUM(`fct_demand_forecast`.`forecast_p50`) AS `total_13w_forecast_p50`\nFROM `toy_demand_allocation`.`gold`.`fct_demand_forecast` AS `fct_demand_forecast`\nINNER JOIN `toy_demand_allocation`.`gold`.`dim_product` AS `dim_product`\n  ON `fct_demand_forecast`.`sku_id` = `dim_product`.`sku_id`\nWHERE `dim_product`.`brand` IS NOT NULL\nGROUP BY `dim_product`.`brand`\nORDER BY `total_13w_forecast_p50` DESC"
+    },
+    {
+      "verdict": "PASS",
+      "used_fct_demand_forecast": true,
+      "detail": "every reference row found, same row count",
+      "genie_sql": "SELECT\n  `dim_product`.`brand` AS `brand`,\n  SUM(`fct_demand_forecast`.`forecast_p50`) AS `total_13w_p50_forecast_demand`\nFROM `toy_demand_allocation`.`gold`.`fct_demand_forecast` AS `fct_demand_forecast`\nINNER JOIN `toy_demand_allocation`.`gold`.`dim_product` AS `dim_product`\n  ON `fct_demand_forecast`.`sku_id` = `dim_product`.`sku_id`\nWHERE `dim_product`.`brand` IS NOT NULL\n  AND `fct_demand_forecast`.`forecast_p50` IS NOT NULL\n  AND `fct_demand_forecast`.`horizon` BETWEEN 1 AND 13\nGROUP BY `dim_product`.`brand`\nORDER BY `total_13w_p50_forecast_demand` DESC"
+    }
+  ]
+}

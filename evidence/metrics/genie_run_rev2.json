@@ -1,0 +1,583 @@
+{
+  "space_id": "01f1c8cc66d713fba1decec949c0740c",
+  "instruction_rev": 2,
+  "tag": "rev2",
+  "results": [
+    {
+      "key": "q01_critical_count",
+      "question": "How many SKU and retailer combinations are at CRITICAL risk, and how much revenue is at risk?",
+      "why": "basic filter + aggregate on the risk table",
+      "conversation_id": "01f1c8cddf0818a4a4ee73a57b196274",
+      "message_id": "01f1c8cddf1312e280cbdfc61c7d470d",
+      "status": "MessageStatus.COMPLETED",
+      "seconds": 19.0,
+      "genie_description": "You want to know the total number of SKU-retailer pairs flagged as CRITICAL risk, along with the total revenue exposed on those pairs.",
+      "genie_sql": "SELECT COUNT(*) AS `sku_retailer_combinations_at_critical_risk`, SUM(`revenue_at_risk_usd`) AS `total_revenue_at_risk_usd`\nFROM `toy_demand_allocation`.`gold`.`fct_stockout_risk`\nWHERE `risk_tier` = 'CRITICAL'",
+      "genie_text": "There are **434** SKU-retailer combinations at **CRITICAL** risk, with **$509,957.82** in total revenue at risk. Based on this result, the average revenue at risk is about **$1,174.10 per SKU-retailer combination**.",
+      "genie_columns": [
+        "sku_retailer_combinations_at_critical_risk",
+        "total_revenue_at_risk_usd"
+      ],
+      "genie_rows": [
+        [
+          "434",
+          "509957.81999999995"
+        ]
+      ],
+      "genie_row_count": 1,
+      "reference_sql": "SELECT COUNT(*) AS n, ROUND(SUM(revenue_at_risk_usd), 0) AS revenue_at_risk FROM toy_demand_allocation.gold.fct_stockout_risk WHERE risk_tier = 'CRITICAL'",
+      "reference_columns": [
+        "n",
+        "revenue_at_risk"
+      ],
+      "reference_rows": [
+        [
+          "434",
+          "509958.0"
+        ]
+      ],
+      "verdict": "PASS",
+      "detail": "every reference row found, same row count"
+    },
+    {
+      "key": "q02_top_mass_a",
+      "question": "Show the 5 highest severity at-risk SKUs for MASS_A.",
+      "why": "'highest severity' must map to severity_score, not risk_tier",
+      "conversation_id": "01f1c8cdeba31ec79fac8fd1ac5e15c6",
+      "message_id": "01f1c8cdebac1a049d9ef9293ac64304",
+      "status": "MessageStatus.COMPLETED",
+      "seconds": 18.8,
+      "genie_description": "You want to see the top 5 SKUs with the highest severity scores that are at risk for the retailer MASS_A.",
+      "genie_sql": "SELECT\n  `sku_id`,\n  `brand`,\n  `license_family`,\n  `risk_tier`,\n  `severity_score`,\n  `revenue_at_risk_usd`\nFROM `toy_demand_allocation`.`gold`.`fct_stockout_risk`\nWHERE `retailer_code` = 'MASS_A'\n  AND `sku_id` IS NOT NULL\n  AND `severity_score` IS NOT NULL\nORDER BY `severity_score` DESC\nLIMIT 5",
+      "genie_text": "Here are the **5 highest-severity at-risk SKUs** for **MASS_A**; all **5** are marked **CRITICAL**.\n\n- **SKU-01723** \u2014 **Titan Squad**, **SOCIAL_TREND**, severity **99.53**, revenue at risk **$40,623.80**\n- **SKU-00135** \u2014 **Snugglewick**, **FILM_TIE_IN**, severity **99.45**, revenue at risk **$11,691.66**\n- **SKU-02079** \u2014 **Snugglewick**, **SOCIAL_TREND**, severity **99.30**, revenue at risk **$8,782.16**\n- **SKU-02016** \u2014 **Titan Squad**, **SOCIAL_TREND**, severity **99.19**, revenue at risk **$7,285.82**\n- **SKU-00920** \u2014 **Snugglewick**, **SOCIAL_TREND**, severity **99.15**, revenue at risk **$6,547.05**\n\nAcross these top 5, severity is tightly clustered between **99.15** and **99.53**, while **SOCIAL_TREND** appears in **4 of 5** SKUs and the largest revenue exposure is **SKU-01723**.",
+      "genie_columns": [
+        "sku_id",
+        "brand",
+        "license_family",
+        "risk_tier",
+        "severity_score",
+        "revenue_at_risk_usd"
+      ],
+      "genie_rows": [
+        [
+          "SKU-01723",
+          "Titan Squad",
+          "SOCIAL_TREND",
+          "CRITICAL",
+          "99.53",
+          "40623.8"
+        ],
+        [
+          "SKU-00135",
+          "Snugglewick",
+          "FILM_TIE_IN",
+          "CRITICAL",
+          "99.45",
+          "11691.66"
+        ],
+        [
+          "SKU-02079",
+          "Snugglewick",
+          "SOCIAL_TREND",
+          "CRITICAL",
+          "99.3",
+          "8782.16"
+        ],
+        [
+          "SKU-02016",
+          "Titan Squad",
+          "SOCIAL_TREND",
+          "CRITICAL",
+          "99.19",
+          "7285.82"
+        ],
+        [
+          "SKU-00920",
+          "Snugglewick",
+          "SOCIAL_TREND",
+          "CRITICAL",
+          "99.15",
+          "6547.05"
+        ]
+      ],
+      "genie_row_count": 5,
+      "reference_sql": "SELECT sku_id, severity_score FROM toy_demand_allocation.gold.fct_stockout_risk WHERE retailer_code = 'MASS_A' ORDER BY severity_score DESC, sku_id LIMIT 5",
+      "reference_columns": [
+        "sku_id",
+        "severity_score"
+      ],
+      "reference_rows": [
+        [
+          "SKU-01723",
+          "99.53"
+        ],
+        [
+          "SKU-00135",
+          "99.45"
+        ],
+        [
+          "SKU-02079",
+          "99.3"
+        ],
+        [
+          "SKU-02016",
+          "99.19"
+        ],
+        [
+          "SKU-00920",
+          "99.15"
+        ]
+      ],
+      "verdict": "PASS",
+      "detail": "every reference row found, same row count"
+    },
+    {
+      "key": "q03_revenue_by_family",
+      "question": "Which licence family has the most revenue at risk?",
+      "why": "spelling variant: licence vs license_family",
+      "conversation_id": "01f1c8cdf77a17dc8a9167e6278974bc",
+      "message_id": "01f1c8cdf784153092667ae0882a1b35",
+      "status": "MessageStatus.COMPLETED",
+      "seconds": 13.3,
+      "genie_description": "You want to know which licence family has the highest total revenue at risk due to projected stockouts.",
+      "genie_sql": "WITH ranked_license_family AS (\n  SELECT\n    `license_family`,\n    SUM(`revenue_at_risk_usd`) AS `total_revenue_at_risk_usd`,\n    RANK() OVER (ORDER BY SUM(`revenue_at_risk_usd`) DESC) AS `risk_rank`\n  FROM `toy_demand_allocation`.`gold`.`fct_stockout_risk`\n  WHERE `license_family` IS NOT NULL\n  GROUP BY `license_family`\n)\nSELECT\n  `license_family`,\n  `total_revenue_at_risk_usd`\nFROM ranked_license_family\nWHERE `risk_rank` <= 1\nORDER BY `total_revenue_at_risk_usd` DESC;",
+      "genie_text": "**SOCIAL_TREND** has the most revenue at risk, with total revenue at risk of **$579,003.64**. In this result, **SOCIAL_TREND** ranks highest among licence families for revenue exposure.",
+      "genie_columns": [
+        "license_family",
+        "total_revenue_at_risk_usd"
+      ],
+      "genie_rows": [
+        [
+          "SOCIAL_TREND",
+          "579003.6400000001"
+        ]
+      ],
+      "genie_row_count": 1,
+      "reference_sql": "SELECT license_family, ROUND(SUM(revenue_at_risk_usd), 0) AS revenue_at_risk FROM toy_demand_allocation.gold.fct_stockout_risk GROUP BY license_family ORDER BY revenue_at_risk DESC LIMIT 1",
+      "reference_columns": [
+        "license_family",
+        "revenue_at_risk"
+      ],
+      "reference_rows": [
+        [
+          "SOCIAL_TREND",
+          "579004.0"
+        ]
+      ],
+      "verdict": "PASS",
+      "detail": "every reference row found, same row count"
+    },
+    {
+      "key": "q04_soon",
+      "question": "How many SKUs are projected to stock out within 4 weeks?",
+      "why": "distinct SKUs, not SKU x retailer rows",
+      "conversation_id": "01f1c8cdffe91f38bb50f813bfa7c5ad",
+      "message_id": "01f1c8cdfff418d8a7db8edfaa9fe099",
+      "status": "MessageStatus.COMPLETED",
+      "seconds": 19.2,
+      "genie_description": "You want to know how many unique SKUs are projected to stock out within the next 4 weeks.",
+      "genie_sql": "SELECT COUNT(DISTINCT `sku_id`) AS `sku_count`\nFROM `toy_demand_allocation`.`gold`.`fct_stockout_risk`\nWHERE `weeks_to_stockout` IS NOT NULL\n  AND `weeks_to_stockout` <= 4",
+      "genie_text": "**454 SKUs** are projected to stock out within **4 weeks** based on records where `weeks_to_stockout` is **4 or less**. The result set contains **1 row**, showing a single total count for projected near-term stockout risk.",
+      "genie_columns": [
+        "sku_count"
+      ],
+      "genie_rows": [
+        [
+          "454"
+        ]
+      ],
+      "genie_row_count": 1,
+      "reference_sql": "SELECT COUNT(DISTINCT sku_id) AS skus FROM toy_demand_allocation.gold.fct_stockout_risk WHERE weeks_to_stockout <= 4",
+      "reference_columns": [
+        "skus"
+      ],
+      "reference_rows": [
+        [
+          "454"
+        ]
+      ],
+      "verdict": "PASS",
+      "detail": "scalar within 1%"
+    },
+    {
+      "key": "q05_wape_family",
+      "question": "What is forecast accuracy (WAPE) by licence family?",
+      "why": "a ratio metric: must use the governed definition, never an average of row ratios",
+      "conversation_id": "01f1c8ce0bf9118787fdd219d7df1b56",
+      "message_id": "01f1c8ce0c05123390d6ade307774137",
+      "status": "MessageStatus.COMPLETED",
+      "seconds": 20.2,
+      "genie_description": "You want to see the forecast accuracy measured by WAPE and bias percentage for each licence family.",
+      "genie_sql": "SELECT `License Family`, MEASURE(`WAPE Pct`) AS wape_pct, MEASURE(`Bias Pct`) AS bias_pct\nFROM toy_demand_allocation.gold.mv_forecast_accuracy\nWHERE `License Family` IS NOT NULL\nGROUP BY ALL\nORDER BY wape_pct DESC",
+      "genie_text": "Forecast accuracy varies significantly across licence families, measured by WAPE (lower is better):\n- **SOCIAL_TREND**: highest error at **109.9% WAPE**, with a **-12.4%** bias (under-forecasting)\n- **FILM_TIE_IN**: moderate error at **56.4% WAPE**, with a **+34.6%** bias (over-forecasting)\n- **EVERGREEN**: lowest error at **20.4% WAPE**, with a near-neutral **+1.2%** bias\n\nOverall, forecast accuracy improves sharply from trend-driven to evergreen licences, suggesting that stable, long-running properties are far easier to forecast reliably than trend-based or film-tied products.",
+      "genie_columns": [
+        "License Family",
+        "wape_pct",
+        "bias_pct"
+      ],
+      "genie_rows": [
+        [
+          "SOCIAL_TREND",
+          "109.92253379790941",
+          "-12.365137282229952"
+        ],
+        [
+          "FILM_TIE_IN",
+          "56.412640211054544",
+          "34.637125488893815"
+        ],
+        [
+          "EVERGREEN",
+          "20.405628222255963",
+          "1.2028378696970399"
+        ]
+      ],
+      "genie_row_count": 3,
+      "reference_sql": "SELECT `License Family` AS license_family, ROUND(MEASURE(`WAPE Pct`), 1) AS wape_pct FROM toy_demand_allocation.gold.mv_forecast_accuracy GROUP BY ALL ORDER BY license_family",
+      "reference_columns": [
+        "license_family",
+        "wape_pct"
+      ],
+      "reference_rows": [
+        [
+          "EVERGREEN",
+          "20.4"
+        ],
+        [
+          "FILM_TIE_IN",
+          "56.4"
+        ],
+        [
+          "SOCIAL_TREND",
+          "109.9"
+        ]
+      ],
+      "verdict": "PASS",
+      "detail": "every reference row found, same row count"
+    },
+    {
+      "key": "q06_p90_trend",
+      "question": "How often does the P90 forecast cover actual demand for SOCIAL_TREND items?",
+      "why": "the build's headline finding; must come from the metric view",
+      "conversation_id": "01f1c8ce18aa1e82b52ff9f6765d3668",
+      "message_id": "01f1c8ce18b4123eb6bc0634199ac114",
+      "status": "MessageStatus.COMPLETED",
+      "seconds": 13.4,
+      "genie_description": "You want to see how often the P90 forecast covers the actual demand specifically for items in the SOCIAL_TREND license family.",
+      "genie_sql": "SELECT `License Family`, MEASURE(`P90 Coverage Pct`) AS p90_coverage_pct\nFROM toy_demand_allocation.gold.mv_forecast_accuracy\nWHERE `License Family` ILIKE '%SOCIAL_TREND%'\nGROUP BY ALL",
+      "genie_text": "For **SOCIAL_TREND** licensed items, the P90 forecast covers actual demand **74.13%** of the time, meaning in roughly 1 out of 4 cases actual demand exceeds the P90 forecast level.",
+      "genie_columns": [
+        "License Family",
+        "p90_coverage_pct"
+      ],
+      "genie_rows": [
+        [
+          "SOCIAL_TREND",
+          "74.13482908244259"
+        ]
+      ],
+      "genie_row_count": 1,
+      "reference_sql": "SELECT ROUND(MEASURE(`P90 Coverage Pct`), 1) AS p90_coverage_pct FROM toy_demand_allocation.gold.mv_forecast_accuracy WHERE `License Family` = 'SOCIAL_TREND'",
+      "reference_columns": [
+        "p90_coverage_pct"
+      ],
+      "reference_rows": [
+        [
+          "74.1"
+        ]
+      ],
+      "verdict": "PASS",
+      "detail": "scalar within 1%"
+    },
+    {
+      "key": "q07_fill_rate",
+      "question": "What is the overall fill rate for each retailer?",
+      "why": "weighted fill rate, not an average of weekly percentages",
+      "conversation_id": "01f1c8ce214c148f9a419b8c544221aa",
+      "message_id": "01f1c8ce21541becba701e869668d37d",
+      "status": "MessageStatus.COMPLETED",
+      "seconds": 13.8,
+      "genie_description": "You want to see the overall fill rate percentage for each retailer.",
+      "genie_sql": "SELECT\n  `Retailer`,\n  MEASURE(`Fill Rate Pct`) AS `fill_rate_pct`\nFROM `toy_demand_allocation`.`gold`.`mv_fill_rate`\nWHERE `Retailer` IS NOT NULL\nGROUP BY ALL\nORDER BY `Retailer` ASC",
+      "genie_text": "The overall fill rate is **96.46%** for **ETAIL_C**, **96.34%** for **MASS_A**, and **96.01%** for **MASS_B**. Across the 3 retailers shown, fill rates are tightly clustered within about **0.45 percentage points**, with **ETAIL_C** highest and **MASS_B** lowest.",
+      "genie_columns": [
+        "Retailer",
+        "fill_rate_pct"
+      ],
+      "genie_rows": [
+        [
+          "ETAIL_C",
+          "96.45902937791800"
+        ],
+        [
+          "MASS_A",
+          "96.33738578574816"
+        ],
+        [
+          "MASS_B",
+          "96.01324087515346"
+        ]
+      ],
+      "genie_row_count": 3,
+      "reference_sql": "SELECT Retailer, ROUND(MEASURE(`Fill Rate Pct`), 2) AS fill_rate_pct FROM toy_demand_allocation.gold.mv_fill_rate GROUP BY ALL ORDER BY Retailer",
+      "reference_columns": [
+        "Retailer",
+        "fill_rate_pct"
+      ],
+      "reference_rows": [
+        [
+          "ETAIL_C",
+          "96.46"
+        ],
+        [
+          "MASS_A",
+          "96.34"
+        ],
+        [
+          "MASS_B",
+          "96.01"
+        ]
+      ],
+      "verdict": "PASS",
+      "detail": "every reference row found, same row count"
+    },
+    {
+      "key": "q08_lowest_otif",
+      "question": "Which retailer has the lowest OTIF?",
+      "why": "metric view selection",
+      "conversation_id": "01f1c8ce2a35180481fa3dd3b2e3f373",
+      "message_id": "01f1c8ce2a3e1a10a2d9047ec28fbc80",
+      "status": "MessageStatus.COMPLETED",
+      "seconds": 25.4,
+      "genie_description": "You want to know which retailer has the lowest on-time, in-full (OTIF) delivery rate overall, across all time periods combined.",
+      "genie_sql": "WITH `otif_by_retailer` AS (\n  SELECT\n    `Retailer`,\n    MEASURE(`OTIF Pct`) AS `otif_pct`\n  FROM `toy_demand_allocation`.`gold`.`mv_otif`\n  WHERE `Retailer` IS NOT NULL\n  GROUP BY ALL\n), `ranked` AS (\n  SELECT\n    `Retailer`,\n    `otif_pct`,\n    RANK() OVER (ORDER BY `otif_pct` ASC) AS `rank`\n  FROM `otif_by_retailer`\n)\nSELECT\n  `Retailer`,\n  `otif_pct`\nFROM `ranked`\nWHERE `rank` <= 1\nORDER BY `otif_pct` ASC, `Retailer` ASC",
+      "genie_text": "**MASS_B** has the lowest OTIF at **86.12105830407120%**. Based on the 1 returned result, **MASS_B** is the lowest-performing retailer on OTIF in this comparison. Would you prefer to see the retailer with the lowest OTIF for the most recent week or quarter instead of across all historical data combined?",
+      "genie_columns": [
+        "Retailer",
+        "otif_pct"
+      ],
+      "genie_rows": [
+        [
+          "MASS_B",
+          "86.12105830407120"
+        ]
+      ],
+      "genie_row_count": 1,
+      "reference_sql": "SELECT Retailer, ROUND(MEASURE(`OTIF Pct`), 2) AS otif_pct FROM toy_demand_allocation.gold.mv_otif GROUP BY ALL ORDER BY otif_pct ASC LIMIT 1",
+      "reference_columns": [
+        "Retailer",
+        "otif_pct"
+      ],
+      "reference_rows": [
+        [
+          "MASS_B",
+          "86.12"
+        ]
+      ],
+      "verdict": "PASS",
+      "detail": "every reference row found, same row count"
+    },
+    {
+      "key": "q09_decision_mix",
+      "question": "How many allocation decisions did planners accept, override and defer?",
+      "why": "the decision-capture table written by the app",
+      "conversation_id": "01f1c8ce3a1019059d7b198c3a83b75e",
+      "message_id": "01f1c8ce3a19121db4ab7ade1742830c",
+      "status": "MessageStatus.COMPLETED",
+      "seconds": 18.4,
+      "genie_description": "You want to see how many allocation decisions fall into each category - accept, override, or defer - counted across all planner decisions.",
+      "genie_sql": "SELECT `action`, COUNT(*) AS `decision_count`\nFROM `toy_demand_allocation`.`gold`.`fct_allocation_decisions`\nWHERE `action` IN ('accept', 'override', 'defer')\nGROUP BY `action`\nORDER BY `decision_count` DESC",
+      "genie_text": "Planners made **9 overrides**, **8 accepts**, and **8 deferrals**. **Override** was the most common decision, while **accept** and **defer** were tied.",
+      "genie_columns": [
+        "action",
+        "decision_count"
+      ],
+      "genie_rows": [
+        [
+          "override",
+          "9"
+        ],
+        [
+          "accept",
+          "8"
+        ],
+        [
+          "defer",
+          "8"
+        ]
+      ],
+      "genie_row_count": 3,
+      "reference_sql": "SELECT action, COUNT(*) AS decisions FROM toy_demand_allocation.gold.fct_allocation_decisions GROUP BY action ORDER BY action",
+      "reference_columns": [
+        "action",
+        "decisions"
+      ],
+      "reference_rows": [
+        [
+          "accept",
+          "8"
+        ],
+        [
+          "defer",
+          "8"
+        ],
+        [
+          "override",
+          "9"
+        ]
+      ],
+      "verdict": "PASS",
+      "detail": "every reference row found, same row count"
+    },
+    {
+      "key": "q10a_override_gross",
+      "question": "How many units did planners move in total when they overrode a recommendation, counting increases and decreases alike?",
+      "why": "gross change. The first wording of this question ('by how many units in total did planners change...') was ambiguous: Genie read it as gross (46), the reference as net (14). Genie's reading was defensible; the question was the bug",
+      "conversation_id": "01f1c8ce45a61ca78d7e963c2855bdd0",
+      "message_id": "01f1c8ce45b21413a5ea8f4f93c4bf9a",
+      "status": "MessageStatus.COMPLETED",
+      "seconds": 19.1,
+      "genie_description": "You want the total number of units that planners adjusted (up or down) whenever they overrode the model's recommendation, treating increases and decreases as equally counted.",
+      "genie_sql": "SELECT SUM(ABS(`override_delta_units`)) AS `total_units_moved`\nFROM `toy_demand_allocation`.`gold`.`fct_allocation_decisions`\nWHERE `action` ILIKE '%override%'",
+      "genie_text": "Planners moved **46 units** in total when recommendations were overridden, with increases and decreases counted the same way using absolute unit changes. The result set contains **1 row**, and that row shows `total_units_moved = 46`.",
+      "genie_columns": [
+        "total_units_moved"
+      ],
+      "genie_rows": [
+        [
+          "46"
+        ]
+      ],
+      "genie_row_count": 1,
+      "reference_sql": "SELECT SUM(ABS(override_delta_units)) AS units_moved FROM toy_demand_allocation.gold.fct_allocation_decisions WHERE action = 'override'",
+      "reference_columns": [
+        "units_moved"
+      ],
+      "reference_rows": [
+        [
+          "46"
+        ]
+      ],
+      "verdict": "PASS",
+      "detail": "scalar within 1%"
+    },
+    {
+      "key": "q10b_override_net",
+      "question": "What was the net unit change from planner overrides, netting increases against decreases?",
+      "why": "net change, stated unambiguously",
+      "conversation_id": "01f1c8ce518918f28ddac1a6e301cbe1",
+      "message_id": "01f1c8ce51921a2991ef788c719ceb6b",
+      "status": "MessageStatus.COMPLETED",
+      "seconds": 25.2,
+      "genie_description": "You want to see the total net change in units resulting from planner overrides, where increases and decreases in units are summed together.",
+      "genie_sql": "SELECT SUM(`override_delta_units`) AS `net_unit_change`\nFROM `toy_demand_allocation`.`gold`.`fct_allocation_decisions`\nWHERE `action` ILIKE '%override%'",
+      "genie_text": "The net unit change from planner overrides, after offsetting increases and decreases, was **14 units**. Based on the single result returned, planner overrides produced an overall **increase** of 14 units.",
+      "genie_columns": [
+        "net_unit_change"
+      ],
+      "genie_rows": [
+        [
+          "14"
+        ]
+      ],
+      "genie_row_count": 1,
+      "reference_sql": "SELECT SUM(override_delta_units) AS net_units_changed FROM toy_demand_allocation.gold.fct_allocation_decisions WHERE action = 'override'",
+      "reference_columns": [
+        "net_units_changed"
+      ],
+      "reference_rows": [
+        [
+          "14"
+        ]
+      ],
+      "verdict": "PASS",
+      "detail": "scalar within 1%"
+    },
+    {
+      "key": "q11_forecast_brand",
+      "question": "What is the total 13-week p50 forecast demand by brand?",
+      "why": "needs a join: the forecast table has no brand column",
+      "conversation_id": "01f1c8ce61561d79b5b6f465b18efe5b",
+      "message_id": "01f1c8ce615f18749c8860d854d36b1c",
+      "status": "MessageStatus.COMPLETED",
+      "seconds": 34.2,
+      "genie_description": "You want to see the total forecasted demand for the next 13 weeks, broken down by brand.",
+      "genie_sql": "SELECT\n  `dim_product`.`brand` AS `brand`,\n  SUM(`fct_demand_forecast`.`forecast_p50`) AS `total_13w_forecast_p50`\nFROM `toy_demand_allocation`.`gold`.`fct_demand_forecast` AS `fct_demand_forecast`\nINNER JOIN `toy_demand_allocation`.`gold`.`dim_product` AS `dim_product`\n  ON `fct_demand_forecast`.`sku_id` = `dim_product`.`sku_id`\nWHERE `dim_product`.`brand` IS NOT NULL\n  AND `fct_demand_forecast`.`horizon` IS NOT NULL\n  AND `fct_demand_forecast`.`horizon` BETWEEN 1 AND 13\nGROUP BY `dim_product`.`brand`\nORDER BY `total_13w_forecast_p50` DESC",
+      "genie_text": "The total 13-week p50 forecast demand by brand is **1,285,857.63** for **Snugglewick**, **1,212,704.21** for **Titan Squad**, and **911,951.83** for **Glowberry Pets**. Across the 3 brands shown, **Snugglewick** has the highest forecast demand and **Glowberry Pets** the lowest.",
+      "genie_columns": [
+        "brand",
+        "total_13w_forecast_p50"
+      ],
+      "genie_rows": [
+        [
+          "Snugglewick",
+          "1285857.6299999987"
+        ],
+        [
+          "Titan Squad",
+          "1212704.2099999972"
+        ],
+        [
+          "Glowberry Pets",
+          "911951.8300000062"
+        ]
+      ],
+      "genie_row_count": 3,
+      "reference_sql": "SELECT p.brand, ROUND(SUM(f.forecast_p50), 0) AS p50_units FROM toy_demand_allocation.gold.fct_demand_forecast f JOIN toy_demand_allocation.gold.dim_product p USING (sku_id) GROUP BY p.brand ORDER BY p.brand",
+      "reference_columns": [
+        "brand",
+        "p50_units"
+      ],
+      "reference_rows": [
+        [
+          "Glowberry Pets",
+          "911952.0"
+        ],
+        [
+          "Snugglewick",
+          "1285858.0"
+        ],
+        [
+          "Titan Squad",
+          "1212704.0"
+        ]
+      ],
+      "verdict": "PASS",
+      "detail": "every reference row found, same row count"
+    },
+    {
+      "key": "q12_margin",
+      "question": "What is the gross margin on SKU-01723?",
+      "why": "governance: the Stage B column mask hides cost and margin; Genie must not invent one",
+      "conversation_id": "01f1c8ce7666139ba832df8408200f43",
+      "message_id": "01f1c8ce76741966a91ea11fcca609a8",
+      "status": "MessageStatus.COMPLETED",
+      "seconds": 25.1,
+      "genie_description": "You want to see the gross margin percentage for the specific SKU with ID 'SKU-01723'.",
+      "genie_sql": "SELECT `sku_id`, `gross_margin_pct`\nFROM `toy_demand_allocation`.`gold`.`dim_product`\nWHERE `sku_id` = 'SKU-01723'",
+      "genie_text": "For **SKU-01723**, the gross margin is **not available** because `gross_margin_pct` is **null**. The single returned record shows **sku_id = SKU-01723** with no gross margin value populated.",
+      "genie_columns": [
+        "sku_id",
+        "gross_margin_pct"
+      ],
+      "genie_rows": [
+        [
+          "SKU-01723",
+          null
+        ]
+      ],
+      "genie_row_count": 1,
+      "reference_sql": "SELECT gross_margin_pct FROM toy_demand_allocation.gold.dim_product WHERE sku_id = 'SKU-01723'",
+      "reference_columns": [
+        "gross_margin_pct"
+      ],
+      "reference_rows": [
+        [
+          null
+        ]
+      ],
+      "verdict": "PASS",
+      "detail": "masked columns came back NULL / no value stated"
+    }
+  ]
+}
