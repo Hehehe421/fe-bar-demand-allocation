@@ -5,9 +5,9 @@
 | | Session 1 | Session 2 |
 |---|---|---|
 | Conversation ID | `26e66d02-d19b-4610-94e9-07fcbdcb05dd` | `a64aa061-e4cb-41a3-896a-efc5806921bd` |
-| Agent | Claude Code (Opus 5, 1M context), `system.ai.claude-opus-5[1m]` | Claude Code (Sonnet 5.5, 1M context), `system.ai.claude-sonnet-5-5[1m]` |
+| Agent | Claude Code (Opus 5, 1M context), `system.ai.claude-opus-5[1m]` | Claude Code: Sonnet 5.5 (`system.ai.claude-sonnet-5-5[1m]`), then Opus 5.5 (`system.ai.claude-opus-5-5[1m]`) in the same conversation |
 | Date | 2026-10-08 to 2026-10-14 | 2026-10-15 |
-| Work | Stages A, B, C1, C2, D; scope v2 | Servable forecaster and endpoint fix, synced-table trim, agent re-run, Stage E (Genie) |
+| Work | Stages A, B, C1, C2, D; scope v2 | Servable forecaster and endpoint fix, Stage E (Genie), Stage F (app), four synced tables, lineage evidence, history scrub, business case, README, deck |
 | Operator | Sixuan He, Solutions Architect, Databricks | same |
 
 Each conversation ID is confirmed from two independent paths: the session

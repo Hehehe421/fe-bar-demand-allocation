@@ -1,0 +1,5 @@
+lever,name,kpi,measured_loss_per_year_usd,value_factor,capture_low,value_low_usd,capture_mid,value_mid_usd,capture_high,value_high_usd
+lost_sales,Recover sales lost to stockouts,"Stockout-weeks, fill rate",1835138,0.38,0.1,69735,0.2,139470,0.3,209206
+air_freight,Plan inbound on ocean instead of expediting by air,Freight cost per unit,705567,0.856,0.15,90638,0.3,181276,0.45,271915
+markdown,Buy and allocate less into a cooling licence,"Markdown $, weeks of supply",2646936,1.0,0.05,132347,0.1,264694,0.15,397040
+chargebacks,Fewer compliance chargebacks,"OTIF, chargeback $",420239,1.0,0.1,42024,0.2,84048,0.3,126072

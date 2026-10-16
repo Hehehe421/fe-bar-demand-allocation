@@ -1,301 +1,264 @@
-# Demand forecasting and constrained allocation for a licensed toy manufacturer
+# Allocation Command Center: see which SKUs will run out, what it is worth, and what to do about it
 
-> **Build status: 7 of 8 items complete.** Stages A (Lakeflow), B (Unity
-> Catalog), C1 (classical ML, batch and real-time), C2 (GenAI agent), D
-> (Lakebase) and E (Genie) and F (the app) are built, executed and evidenced. The deck
-> and docs are **not built**, and nothing in this repository claims
-> otherwise: no empty modules, no unexecuted notebooks, no asserted results for
-> anything unbuilt. See [Build status](#build-status) for exactly what exists.
-> **All data is synthetic.**
+**A licensed toy and collectibles manufacturer loses 16.6% of its wholesale revenue every year to four supply
+problems a better demand forecast can attack: sales lost to stockouts, air freight to chase spikes, markdown on
+over-bought licences, and retailer chargebacks for late or short orders.** This build gives its executives one screen
+that shows every SKU projected to stock out in the next 13 weeks, the revenue at stake, and a recommended split of
+constrained supply. It gives its planners a worklist where every decision is recorded and can be measured.
 
-## The problem
+| | |
+|---|---|
+| **Modelled value** | **$335K to $1.0M a year on the synthetic $33.9M portfolio (1.0% to 3.0% of revenue); $4.9M to $14.8M a year for a $500M manufacturer with the same loss profile** ([business case](docs/BUSINESS_CASE.md)) |
+| **What the app shows today** | **$1.38M of revenue at risk in the next 13 weeks; 434 critical positions ($510K) that run out within two weeks**, each with a recommended allocation |
+| **Forecast** | 67.4% WAPE against 95.3% for the naive forecast: **29% less error** (7 algorithms, 6 families, one holdout) |
+| **Run cost** | About **$8K a year** at list price at this scale, measured from `system.billing.usage` |
+| **Platform** | Replaces the incumbent AutoML tool (DataRobot) with forecasting, an agent, governance, serving and the app on one governed platform |
+| **In the buyer's KPIs** (mid case, illustrative) | Sponsor: about **+2 points of revenue** to margin, markdown **−10%**, air-freight expedites **−30%**. Domain owner: OTIF **86.1% → 88.9%**, stockout-weeks **−20%**, chargebacks **−20%** ([§5 of the business case](docs/BUSINESS_CASE.md)) |
 
-A licensed toy and collectibles manufacturer — collectible plush and licensed
-action figures — sells wholesale into three mass and e-tail accounts, ships
-from four domestic distribution centres, and manufactures offshore on 60–110
-day inbound lead times. Licensed and trend-driven SKUs have short, violently
-spiky demand curves: a film release window or a viral plush character can take
-an item from a few hundred to several thousand units a week in three weeks, and
-then collapse just as fast.
+**All data is synthetic.** The company is described by industry only. Measured numbers come from the generated
+data; capture rates and revenue scale are labelled assumptions ([§6 of the business case](docs/BUSINESS_CASE.md)).
 
-The planning process cannot absorb that. Replenishment is reviewed weekly in
-spreadsheets against a trailing average, and the ocean lead time is 9–16 weeks.
-A spike that develops inside the lead time is structurally uncoverable: by the
-time it is visible in point-of-sale data, the only remedy is air freight at a
-large premium, which arrives weeks late and over-buys into a licence that is
-already cooling. Constrained inventory is then split across retailer DCs
-manually, in a meeting, with no shared system of record for the decision — so
-nobody can measure whether a planner's override beat the model.
+---
 
-Three failure modes, in the buyer's language: **stockout at the retailer DC
-during a spike**, which costs point-of-sale revenue now and shelf facings at
-the next line review; **units pushed to the wrong account**, which clears at
-markdown once the licence cools; and **missed OTIF**, which draws retailer
-compliance chargebacks against the invoice.
+## 1. The customer and the problem
 
-## The measured baseline
+**Industry:** Consumer Goods, toys and licensed collectibles. In the FY27 Consumer Goods Outcome Map this is
+**Collaborative Supply Chain → Smarter Demand and Inventory Decisions**: *Demand & Order forecasting*, *Inventory
+Optimization*, and *Out of Stocks optimization*.
 
-Every figure below is computed from the generated data by
-`notebooks/02_governance_and_baseline.ipynb` and committed to
-[`evidence/metrics/kpi_baseline.csv`](evidence/metrics/kpi_baseline.csv). None
-of it is asserted, and none of it is a claim about any real business.
+**The business.** Collectible plush and licensed action figures, sold wholesale to two mass-retail accounts and one
+e-tail account, shipped from four US distribution centres, manufactured offshore on 9-16 week ocean lead times.
+Licensed and trend-driven SKUs have short, violently spiky demand: a film release or a viral character can take an
+item from a few hundred to several thousand units a week in three weeks, then collapse just as fast.
 
-| KPI | Measured baseline | Where the headroom is |
+**What goes wrong.** Replenishment is reviewed weekly in spreadsheets against a trailing average. A spike that starts
+inside the lead time cannot be covered by ocean. By the time it shows in point-of-sale data, the only remedy is air freight
+at 7x the ocean rate, which lands late and over-buys into a licence that is already cooling. Constrained stock is then
+split across accounts in a meeting, with no system of record. **Nobody can tell whether a planner's override beat
+the model.**
+
+**Who is asking.** The executive sponsor (CFO / COO) wants revenue at risk and margin leakage in one number. The domain
+owner (VP Demand Planning / Supply Chain) wants a Monday-morning queue and fewer chargebacks. The head of AI is
+evaluating whether Databricks can **replace DataRobot** as the ML platform and run all AI/ML on one governed
+platform, without ripping out the ERP, the dbt models or the BI tool the business already uses.
+
+### The measured baseline
+
+Computed from Gold by [`notebooks/02_governance_and_baseline.ipynb`](notebooks/02_governance_and_baseline.ipynb) into
+[`evidence/metrics/kpi_baseline.csv`](evidence/metrics/kpi_baseline.csv) (3 years, 156 weeks). Not asserted.
+
+| KPI | Measured baseline | What it means |
 |---|---:|---|
-| Retailer fill rate (shipped / requested) | **96.26%** | A competent operation — the problem is not aggregate service |
-| Fill rate, confirmed basis | 99.16% | The same weeks look 3 points better on the basis teams usually quote |
-| OTIF (on-time **and** in-full) | **86.14%** | Units arrive, but late or split. This is what triggers penalties |
-| On-time / in-full, separately | 92.66% / 92.97% | Roughly equal contribution, so both need attacking |
-| Stockout-weeks | **74,789** | Concentrated in the spiky licence families |
-| Lost units / lost revenue | 585,575 units / **$5.51M** | 5.85% of unconstrained demand never served |
-| Compliance chargebacks | **$1.26M** (1.24% of invoiced) | Direct consequence of the OTIF gap |
+| Fill rate (shipped / requested) | **96.26%** | Aggregate service is good; one account (MASS_A, 96.3%) is below its 97% commitment |
+| Fill rate, confirmed basis | 99.16% | The basis teams usually quote looks 3 points better |
+| OTIF (on time **and** in full) | **86.14%** | Units arrive, but late or split: this triggers chargebacks |
+| Stockout-weeks | **74,789** | 15.6% of SKU-DC-weeks, concentrated in trend-driven licences |
+| Sales lost to stockouts | **$5.51M** (5.85% of demand) | |
+| Compliance chargebacks | **$1.26M** (1.24% of invoiced) | |
 | Markdown loss | **$7.94M** (7.82% of invoiced) | Over-buying into a collapsing licence |
-| Air-freight premium | **$2.12M** (2.08% of invoiced) | **7.0x** the ocean unit rate — the price of reacting instead of forecasting |
-| Weeks of supply / turns | 17.0 weeks / 3.06 | Long lead times, short licences |
-| Invoiced wholesale (3 years) | $101.5M | Scale of the synthetic portfolio |
+| Air-freight expedites | **$2.12M** (2.08% of invoiced), **7.0x** the ocean rate | The price of reacting instead of forecasting |
+| Weeks of supply / turns | 17.0 weeks / 3.06 | |
 
-The baseline is deliberately **not** uniformly bad, because a straw man would
-not be credible. Aggregate fill rate is good. The money is in five specific,
-separately-attackable places: the OTIF gap, the stockout-weeks on spiky
-licences, the air-freight premium, the markdown, and the chargebacks.
+## 2. What was built: one connected journey
 
-Dollar figures are the synthetic portfolio's own measured values. Any
-forward-looking impact modelling will be presented as a sensitivity table with
-its revenue scale labelled as an input assumption — see
-`src/config.py:SENSITIVITY_REVENUE_SCALES_USD`.
-
-## Architecture
-
-The loop this build is working toward:
-
-```
-landing files -> bronze/silver/gold -> features -> forecast -> risk table
-  -> agent -> app -> Lakebase decision -> back to UC -> Genie asks about overrides
+```text
+landing files (8 sources) ──Lakeflow──▶ bronze ─▶ silver ─▶ gold          ← Unity Catalog governs every hop
+        gold ─▶ ml.demand_features_weekly ─▶ ml.demand_forecaster @champion (7 algorithms, UC registry)
+             ─▶ batch: gold.fct_demand_forecast ─▶ gold.fct_stockout_risk      real-time: toy-demand-forecaster
+             ─▶ GenAI agent (explains, recommends a split)  ─▶ Genie (plain-English questions)
+             ─▶ Lakebase synced tables ─▶ Databricks App ─▶ planner decision written to Lakebase
+             ─▶ write-back ─▶ gold.fct_allocation_decisions ─▶ Genie: "which overrides beat the model?"
 ```
 
-| Stage | What it produces | Status |
+Lineage for every hop, generated from system tables, the model registry and the synced-table API:
+[`evidence/02b_lineage.md`](evidence/02b_lineage.md).
+
+| FE Bar layer | What it is here | Evidence |
 |---|---|---|
-| **A — Lakeflow** | Seeded generator lands 8 sources into `bronze.landing`; serverless declarative pipeline builds 6 Bronze streaming tables, 6 Silver materialized views, 8 Gold materialized views, with 29 data-quality expectations | **Built** |
-| **B — Unity Catalog** | Comments on every Gold table and column; tags; grants for 3 personas + app identity; row filter on retailer; column mask on cost/margin; 3 metric views; lineage | **Built** |
-| **C1 — Classical ML** | Feature Engineering table consumed via `FeatureLookup`, 7 candidates across 6 families in one MLflow experiment, leaderboard, UC registration with `@champion`/`@challenger`, 13-week forward scoring, `gold.fct_stockout_risk` | **Built** |
-| **C2 — GenAI** | MLflow `ResponsesAgent` on Claude via FMAPI with 5 real tools, end-to-end tracing, versioned prompt, 22-row eval with built-in judges + a custom mechanical scorer, registered in UC and deployed to a live Model Serving endpoint | **Built** |
-| **D — Lakebase** | Autoscaling project registered in UC; 4 synced tables ONLINE matching UC row-for-row (risk, forecast, product lookup, fill-rate summary), every one read by the app; native OLTP `allocation_decisions` / `agent_interactions`; decisions merged back into `gold.fct_allocation_decisions` | **Built** |
-| **E — Genie** | Space over 9 Gold tables + 4 governed metric views: business and KPI instructions, metric views marked as the preferred source, synonyms (units/eaches/POS units, fill rate/service level, OTIF, retailer label), 8 curated example queries, 7 joins, 24 benchmarks; 26 questions through the Conversation API scored against reference SQL, run 3 times; the q11 failure and its measured fix are kept | **Built** |
-| **F — Databricks App** | "Allocation Command Center" with a Lakebase-backed KPI header (fill rate, OTIF, WAPE, units and revenue at risk, chargebacks, week-over-week deltas) over three tabs: an executive summary (computed headline, attention list, Genie, top exposures with generated product art), performance and risk (KPIs, trends, accuracy, a distribution-centre map), and forecast and decide (worklist, batch and real-time forecast, agent, accept/override/defer written to Lakebase) | **Built** |
+| **Lakeflow** | Serverless declarative pipeline: 6 Bronze streaming tables, 6 Silver and 8 Gold materialized views, **29 data-quality expectations** that catch the generator's injected faults (8.8M passed, 19,739 failed or dropped) | [`01_lakeflow.md`](evidence/01_lakeflow.md) |
+| **Unity Catalog** | Comments and tags on every Gold object; grants for 3 personas and the app; **row filter** by retailer; **column mask** on cost and margin (proven against the catalog owner); 4 governed **metric views** shared by Genie and the app | [`02_unity_catalog.md`](evidence/02_unity_catalog.md), [`02b_lineage.md`](evidence/02b_lineage.md) |
+| **ML** | Feature Engineering table; **7 candidates across 6 families** in one MLflow experiment, plus a Databricks AutoML run (18 trials); champion and challenger in the UC registry; **batch** scoring with `fe.score_batch` and a **real-time** endpoint, proven identical | [`03_ml_forecast.md`](evidence/03_ml_forecast.md) |
+| **GenAI** | MLflow `ResponsesAgent` on Claude via the Foundation Model API with 5 tools over governed tables and a constrained allocator; traced; 22-row evaluation with built-in judges **and** a mechanical grounding scorer; deployed to Model Serving | [`04_genai_agent.md`](evidence/04_genai_agent.md) |
+| **Lakebase** | 4 synced tables (risk, forecast, product lookup, fill-rate summary), UC = Postgres row for row, all read by the app; OLTP tables for decisions and agent calls; decisions merged back to Unity Catalog | [`05_lakebase.md`](evidence/05_lakebase.md) |
+| **Genie** | Space over 9 Gold tables and 4 metric views with business and KPI instructions, synonyms, 8 example queries and 7 joins; **26 questions scored against reference SQL, 3 passes, 78/78**; one earlier failure kept with its measured fix | [`06_genie.md`](evidence/06_genie.md) |
+| **Databricks App** | "Allocation Command Center": KPI header from Lakebase with week-over-week deltas; executive summary; performance and a DC risk map; forecast and decide (worklist, demand history, inbound ETAs, real-time check, agent, accept / override / defer written to Lakebase) | [`07_app.md`](evidence/07_app.md) |
 
-## Evidence index
+## 3. Decisions and trade-offs
 
-The evaluator reads text only, so every built stage writes real, copied-from-the-run
-output to `evidence/`. Each file opens with the command that produced it, a
-timestamp, the workspace, and the fully-qualified UC paths it touched.
+### When to score in batch, and when in real time
+
+Both paths are built and serve the same model. They agree to the unit: max |p50 difference| = 0.000 over 13 weeks
+(`tests/smoke_app.py`).
+
+| | **Batch** (`fe.score_batch` → `gold.fct_demand_forecast`) | **Real time** (`toy-demand-forecaster` endpoint) |
+|---|---|---|
+| Use it when | The decision cadence is no faster than the data: weekly replenishment, the whole portfolio, every account | One decision needs fresh inputs within the session: a mid-week spike, a what-if, an app calling per request |
+| Here | 4,498 SKU × account series × 13 weeks = 58,474 rows a run, feeding the risk table, Lakebase and Genie | The **Re-forecast now** button on one position |
+| Cost | A job that runs and stops | Scale-to-zero, so it is cheap at rest. **The cost is cold start: 52 s and 138 s measured.** Keeping one warm 24/7 costs about 100 DBU a day (measured on comparable always-on endpoints in this workspace) |
+| Lineage and features | Feature lookup joined by Feature Engineering; lineage native | The feature-backed model cannot be served without an online store, so serving uses a plain-pyfunc twin (`ml.demand_forecaster_rt`) registered from the same run. **Trade-off: two registered models to keep in step, guarded by the parity test, instead of running an online feature store** |
+| Default | **Yes.** Planning is weekly | Only where a person is waiting for an answer |
+
+### Why Databricks rather than DataRobot
+
+DataRobot is a strong tool: guided AutoML, automatic feature engineering and model monitoring, approachable for
+analysts. The question is not which one has AutoML. It is **where the model lives relative to the data and the
+decision**.
+
+| | DataRobot (incumbent) | Databricks (this build) |
+|---|---|---|
+| Multi-algorithm experiments | Core strength | 7 algorithms across 6 families on one holdout, plus AutoML (18 trials), all in MLflow ([`03`](evidence/03_ml_forecast.md)) |
+| Where the model lives | A separate platform: data is copied or connected out to it, with its own registry and permissions | **Inside Unity Catalog**, with the same grants, row filter, column mask and lineage as the data. Lineage runs from the source file to the model to the planner's decision ([`02b`](evidence/02b_lineage.md)) |
+| The rest of the loop | Covers the modelling and MLOps slice; pipelines, an operational store, natural-language query and the app are other tools to integrate | Lakeflow, Lakebase, Genie, the agent and the app are on the same platform, under the same governance |
+| Objective | A broad menu of optimisation metrics | **Any objective, in code.** An honest finding: Databricks AutoML offered only RMSE here, which is wrong for overdispersed count demand, so the champion came from the code-first sweep scored on WAPE and pinball loss. It is shown, not hidden ([`03a` export](notebooks/exports/03a_automl.md)) |
+| Lock-in | Models run best in its own runtime; export exists but is product-specific | Open: MLflow, LightGBM, standard pyfunc |
+| Cost | A second licence | A platform already in use; this build costs about $8K a year to run at this scale. Retiring the licence is upside the customer quantifies |
+
+**Where DataRobot would still win:** a team with no engineers who want a purely point-and-click AutoML. The migration
+also has real costs: retraining, re-pointing consumers, and re-validating models. Those belong in the plan, not in a footnote.
+
+### Other decisions
+
+| Decision | Why | What it cost |
+|---|---|---|
+| Lakebase reads `gold.svc_*` projections, not the governed tables | Unity Catalog refuses an online copy of a table with a row filter or column mask; syncing it would leak the masked column | Account scoping for the Lakebase path moves into the app's query |
+| Executive narrative is computed by templates, not written by an LLM | The agent's numbers trace to tool output only 74% of the time; a wrong sentence in front of a CFO is worse than none | Less fluent prose |
+| Agent recommends, a person decides, and the decision is stored with the agent's trace id | Planner overrides become measurable against the model | A decision step that has to be designed and tested |
+| Genie is curated (13 objects, metric views preferred), not pointed at the whole catalog | Fewer wrong-table answers; the q11 failure came from a misleading column, fixed in metadata | Questions outside the curated set need a curation change |
+| Exact-key feature lookup, not an as-of join | Features are computed at the forecast origin and the label taken from origin + h, so leakage is prevented in the frame | No timeseries `FeatureLookup` demonstrated |
+
+## 4. How AI was used to build this
+
+Built with **Claude Code** as a pair-programmer across two sessions. The conversation IDs are in
+[`docs/PROVENANCE.md`](docs/PROVENANCE.md).
+
+* **Spec first.** A written build prompt and scope (customer problem, KPIs, stage-by-stage evidence required) came before any
+  code. The scope was rewritten once (v2) when the real conversation turned out to be a DataRobot comparison.
+* **Skills as guard-rails.** Databricks skills for pipelines, Unity Catalog, ML training and serving, Lakebase, Genie and
+  Apps; MLflow evaluation; a data-visualisation skill whose palette validator was run on the app's colours.
+* **Evidence is generated, never typed.** Every number in `evidence/` and in the business case is written by a script
+  from a live query or a committed CSV (`tools/evidence_*.py`, `tools/value_model.py`). Re-running regenerates it.
+* **The AI checks the AI.** Genie answers are scored against reference SQL, not read and nodded at. The agent has a
+  mechanical grounding scorer beside two LLM judges, and it shows the judges are too generous. The deployed app is tested
+  over HTTP, not only in unit tests.
+* **What the AI got wrong, and how it was caught** (kept in the record on purpose): it claimed two leaderboards were
+  identical after comparing a stale file; it shipped a vacuous unit test (`... or True`); a deployed agent could not
+  read any data for a week while writing fluent answers; an evidence file claimed a point-in-time join that the code
+  does not do; a loose regex audit reported app features that were not there. Each was found by a check, not by luck.
+
+## 5. Evidence index
+
+The evaluator reads text only, so every stage writes real output from the run to `evidence/`, with the workspace,
+timestamp and Unity Catalog paths.
 
 | Stage | Evidence | What it proves |
 |---|---|---|
-| A | [`evidence/01_lakeflow.md`](evidence/01_lakeflow.md) | Pipeline + update ID and `COMPLETED` state; **per-expectation pass/fail/drop counts from the event log** (8,837,513 passed, 19,739 failed or dropped across 29 expectations on 6 datasets); row counts per layer; Bronze→Silver attrition reconciled against the generator's injected faults; the case→each unit normalisation proven; 10-row Gold sample; provenance columns; grain-uniqueness check |
-| A | [`notebooks/01_generate_data.ipynb`](notebooks/01_generate_data.ipynb) · [md export](notebooks/exports/01_generate_data.md) | Full-scale generation run: 107.5 MB across 75 files in 8 sources, with the injected messiness counted explicitly |
-| B | [`evidence/02_unity_catalog.md`](evidence/02_unity_catalog.md) | `SHOW GRANTS` per object; table and column tags from `information_schema`; column-comment coverage; the policy DDL; **masked-vs-unmasked query results with the authenticated identity used for each**; metric-view queries with results; table- and column-level lineage rows |
-| B | [`evidence/02b_lineage.md`](evidence/02b_lineage.md) | Lineage from the landing file to Lakebase: file → bronze → silver → gold → feature table → model (registry dependencies) → forecast rows → risk → the four synced tables with UC-vs-Postgres row parity → the write-back; generated, not typed |
-| B | [`notebooks/02_governance_and_baseline.ipynb`](notebooks/02_governance_and_baseline.ipynb) · [md export](notebooks/exports/02_governance_and_baseline.md) | The KPI baseline measured from Gold, including the loss breakdown by licence family and the ocean-vs-air freight comparison |
-| B | [`evidence/metrics/kpi_baseline.csv`](evidence/metrics/kpi_baseline.csv) | 26 KPIs, each with its value, unit and exact basis of measurement |
-| C1 | [`evidence/03_ml_forecast.md`](evidence/03_ml_forecast.md) | Leaderboard of 7 candidates across 6 families on one holdout; accuracy decomposed by licence family and horizon through the `mv_forecast_accuracy` metric view; the p90-method comparison; UC registry state with both aliases resolved; the risk table tiered, with the constrained-allocation contention |
-| C1 | [`notebooks/03_demand_forecast.ipynb`](notebooks/03_demand_forecast.ipynb) · [md export](notebooks/exports/03_demand_forecast.md) · [`evidence/metrics/forecast_leaderboard.csv`](evidence/metrics/forecast_leaderboard.csv) | The full sweep as executed, including the three modelling errors found and corrected |
-| C2 | [`evidence/04_genai_agent.md`](evidence/04_genai_agent.md) | Runtime-resolved FMAPI endpoint; all five tools invoked against real UC objects; two full agent briefs verbatim; span tree with timings and token counts; 22-row evaluation with per-row scores and the failures in full; UC registration; **a real request/response against the live serving endpoint** |
-| D | [`evidence/05_lakebase.md`](evidence/05_lakebase.md) | `\dt` listing; 4 synced tables ONLINE with row counts matching UC exactly; server-side point lookup of **0.051 ms** by query plan; INSERT/SELECT proving a write landed; the decision round-tripped into `gold.fct_allocation_decisions` and joined back to the risk row that triggered it |
-| E | [`evidence/06_genie.md`](evidence/06_genie.md) | The space as stored (instructions, 8 example queries, synonyms, joins); 26 questions through the Conversation API, each with the SQL Genie wrote, its rows, the reference rows and a data-based verdict; three full passes; the one answer Genie got wrong (q11), its measured fix and the p-value that says it is suggestive, not conclusive |
-| F | [`evidence/07_app.md`](evidence/07_app.md) | The deployed app: URL, `app.yaml` and resource bindings, a real-session log, 14 unit tests, a 16-check backend smoke test and a 9-check smoke test of the **deployed** app over HTTP (status codes, latency, pre/post row counts on `allocation_decisions`) |
-| C2 | [`notebooks/04_allocation_agent.ipynb`](notebooks/04_allocation_agent.ipynb) · [md export](notebooks/exports/04_allocation_agent.md) · [`evidence/metrics/genai_eval_results.csv`](evidence/metrics/genai_eval_results.csv) | The agent run end to end, including the prompt-registry feature gate and the two deployment failures |
+| Lakeflow | [`evidence/01_lakeflow.md`](evidence/01_lakeflow.md) | Pipeline and update id, `COMPLETED`; per-expectation pass / fail / drop counts from the event log; row counts per layer; attrition reconciled against the generator's injected faults |
+| Data | [`notebooks/01_generate_data.ipynb`](notebooks/01_generate_data.ipynb) · [md](notebooks/exports/01_generate_data.md) | 107.5 MB across 75 files in 8 sources, with the injected messiness counted |
+| Unity Catalog | [`evidence/02_unity_catalog.md`](evidence/02_unity_catalog.md) | `SHOW GRANTS`; tags; comment coverage; policy DDL; **masked vs unmasked results per authenticated identity**; metric views |
+| Lineage | [`evidence/02b_lineage.md`](evidence/02b_lineage.md) | File → bronze → silver → gold → features → model → forecast → risk → Lakebase (row parity) → write-back |
+| Baseline | [`notebooks/02_governance_and_baseline.ipynb`](notebooks/02_governance_and_baseline.ipynb) · [`kpi_baseline.csv`](evidence/metrics/kpi_baseline.csv) | 26 KPIs, each with value, unit and basis |
+| Value | [`docs/BUSINESS_CASE.md`](docs/BUSINESS_CASE.md) · [`value_model.csv`](evidence/metrics/value_model.csv) · [`kpi_impact.csv`](evidence/metrics/kpi_impact.csv) | Value by lever with named assumptions, the same mid case in each stakeholder's KPIs, sensitivity to revenue scale, run cost |
+| ML | [`evidence/03_ml_forecast.md`](evidence/03_ml_forecast.md) · [notebook 03](notebooks/03_demand_forecast.ipynb) · [AutoML 03a](notebooks/03a_automl.ipynb) · [`forecast_leaderboard.csv`](evidence/metrics/forecast_leaderboard.csv) | Leaderboard; accuracy by licence family and horizon; p90 method; registry aliases; batch and real-time serving |
+| GenAI | [`evidence/04_genai_agent.md`](evidence/04_genai_agent.md) · [notebook 04](notebooks/04_allocation_agent.ipynb) · [`genai_eval_results.csv`](evidence/metrics/genai_eval_results.csv) | Tools against real UC objects; full briefs; span tree; per-row evaluation with failures; a live endpoint request |
+| Lakebase | [`evidence/05_lakebase.md`](evidence/05_lakebase.md) | Synced tables online with UC parity; 0.051 ms point lookup; INSERT / SELECT; the decision round-tripped to UC |
+| Genie | [`evidence/06_genie.md`](evidence/06_genie.md) | The stored space; 26 questions with Genie's SQL, rows and a data-based verdict, 3 passes; the q11 failure and its measured fix |
+| App | [`evidence/07_app.md`](evidence/07_app.md) · [`smoke_deployed.txt`](evidence/metrics/smoke_deployed.txt) · [`app_log_session.txt`](evidence/metrics/app_log_session.txt) | URL, `app.yaml`, resource bindings, a real-session log; 14 unit tests, 20 backend checks, **9 HTTP checks against the deployed app** with pre / post row counts |
 
-Two results in there are worth calling out because they were produced rather
-than asserted:
+Results worth reading because they were measured rather than asserted:
 
-- **The column mask holds against the catalog owner.** `src/governance/verify_policies.py`
-  signs in as each persona over OAuth M2M and runs the identical query. Only
-  `toy-finance` reads raw cost and margin; every other identity — including me,
-  the catalog owner and a workspace admin — reads `NULL`.
-- **The expectation drop counts reconcile with the generator's known faults.**
-  `sku_resolves_to_master` dropped exactly the 721 orphan SKU references the
-  generator injected, and `pos_units_non_negative` dropped 992 of 997 injected
-  negatives (the other 5 were in rows already removed as duplicates).
-- **The forecast is good where demand is predictable and bad where it is not,
-  and the evidence says which.** 20.4% WAPE on `EVERGREEN` against 109.9% on
-  `SOCIAL_TREND`, whose p90 interval covers only 74.1% of actuals against a 90%
-  target. Since that p90 drives the risk table, the risk table understates
-  exposure on exactly the trend items that matter most — recorded as a
-  limitation rather than averaged away into a single portfolio number.
-- **The agent is correct more often than it is grounded.** `Correctness` passes
-  19 of 22 rows, but the custom mechanical scorer finds only 74.1% of the
-  numbers in its answers trace back to actual tool output, with 5 of 22 answers
-  fully grounded. Two LLM judges and one mechanical check disagree, and the
-  mechanical one is right — which is the whole argument for having it. (Earlier
-  runs scored 20/22 · 74.5% and 19/22 · 73.9%; the spread is itself part of the
-  finding.)
-- **A deployed agent can look fine while every tool fails.** The first deployment's
-  tools all returned permission errors and the model wrote a fluent refusal around
-  them; it went unnoticed until the app's agent panel exposed it. The fix declared the
-  tables the tools read as model resources, and the run now fails if any live tool call
-  returns an error.
+- **The column mask holds against the catalog owner.** Only the finance persona reads cost and margin; every other identity,
+  including the owner and a workspace admin, reads `NULL`. Genie and the agent inherit it.
+- **The forecast is good where demand is predictable and weak where it is not.** 20.4% WAPE on `EVERGREEN`, 109.9% on
+  `SOCIAL_TREND`, whose p90 covers only 74.1% of actuals against a 90% target. The risk table therefore understates exposure on
+  exactly the trend items that matter most. That is recorded as a limitation and is in the business case.
+- **The agent is correct more often than it is grounded.** `Correctness` passes 19 of 22, but only 74.1% of its numbers trace to
+  tool output. The mechanical scorer is right and the two LLM judges are too generous.
+- **A deployed agent can look fine while every tool fails.** It did, for a week, until the app exposed it. The run now fails if
+  any live tool call returns an error.
 
-## How to run it
+## 6. How to run it
 
 ```bash
-# 1. clone
-git clone https://github.com/Hehehe421/fe-bar-demand-allocation.git
-cd fe-bar-demand-allocation
+git clone https://github.com/Hehehe421/fe-bar-demand-allocation.git && cd fe-bar-demand-allocation
+databricks auth login --profile vm-summer-classic          # a NAMED profile; no tokens in this repo
+uv venv --python 3.12 && uv pip install -e .               # uv, never pip
 
-# 2. authenticate with a NAMED PROFILE (no tokens in this repo)
-databricks auth login --profile vm-summer-classic
-
-# 3. local environment (uv, never pip)
-uv venv --python 3.12 && uv pip install -e .
-
-# 4. Stage A — generate data and run the medallion pipeline
-#    (names come from src/config.py; nothing is hardcoded in notebooks)
-python tools/dbx_notebook.py notebooks/01_generate_data.py \
-    --cluster-id "$(python -c 'import src.config as c; print(c.ML_CLUSTER_ID)')"
+# Lakeflow: generate data, run the pipeline, write evidence
+python tools/dbx_notebook.py notebooks/01_generate_data.py --cluster-id "$(python -c 'import src.config as c; print(c.ML_CLUSTER_ID)')"
 databricks pipelines start-update <PIPELINE_ID> --full-refresh --profile vm-summer-classic
 python tools/evidence_01_lakeflow.py <PIPELINE_ID> <UPDATE_ID>
 
-# 5. Stage B — apply governance, verify the policies, measure the baseline
-python -m src.governance.apply
-python -m src.governance.verify_policies
-python tools/dbx_notebook.py notebooks/02_governance_and_baseline.py \
-    --cluster-id "$(python -c 'import src.config as c; print(c.ML_CLUSTER_ID)')"
-python tools/evidence_02_unity_catalog.py
+# Unity Catalog: governance, policy proof, baseline, lineage
+python -m src.governance.apply && python -m src.governance.verify_policies
+python tools/dbx_notebook.py notebooks/02_governance_and_baseline.py --cluster-id <ML_CLUSTER_ID>
+python tools/evidence_02_unity_catalog.py && python tools/evidence_lineage.py
+
+# ML and GenAI: notebooks 03, 03a, 04 the same way (they register and deploy the models)
+
+# Lakebase: projections, synced tables, write-back
+python -m src.lakebase.serving_tables && python -m src.lakebase.sync && python -m src.lakebase.writeback
+
+# Genie: create the space, score it
+python -m src.genie.create_space && python -m src.genie.run_questions --tag rev3 && python tools/evidence_06_genie.py
+
+# App: deploy, then test it
+python app/deploy.py
+python tests/test_app_pure.py && python tests/smoke_app.py && python tests/smoke_deployed.py
+
+# Business case
+python tools/value_model.py
 ```
 
-### Where this lands in the workspace
+`src/config.py` is the single source of truth for every catalog, schema, table, warehouse, cluster and endpoint name.
+A reviewable copy of the notebooks (with outputs) and evidence is published to the workspace by
+`tools/publish_workspace.py`.
 
-Notebooks are executed through the Command Execution API, which runs code in a
-context on the cluster and returns output over the wire — it does **not** create
-a workspace notebook. So `tools/dbx_notebook.py` also imports each executed
-notebook into the workspace with `--format JUPYTER`, which preserves the
-captured outputs, giving an openable copy that renders exactly as the committed
-one. Without that step the committed evidence is complete but there is nothing
-to open in the Databricks UI.
+## 7. Production path and limitations
 
-| Asset | Workspace location |
-|---|---|
-| Notebooks (with outputs) | `/Workspace/Users/<you>/fe-bar-demand-allocation/notebooks/` |
-| Source modules | `/Workspace/Users/<you>/fe-bar-demand-allocation/src/` |
-| Catalog | `toy_demand_allocation` (`bronze`, `silver`, `gold`, `ml`) |
-| Pipeline | `toy-demand-allocation-medallion` |
-| MLflow experiments | `.../toy_demand_allocation_forecast` and `..._agent` |
-| Registered models | `ml.demand_forecaster` (feature-backed, batch), `ml.demand_forecaster_rt` (real-time), `ml.allocation_agent` |
-| Serving endpoint | `toy-allocation-agent` |
-| Lakebase | `projects/toy-demand-alloc`, Postgres schema `allocation` |
+- **Ingest.** Production reads the ERP on SQL Server through **Lakeflow Connect** into Bronze, with the same expectations
+  and Gold contract. This build ingests synthetic files from a UC volume via Auto Loader; **no SQL Server connector was run.**
+- **Semantic layer.** The metric views are the governed KPI definitions and the natural home for the dbt models the customer
+  maintains today. Genie, the app and the BI tool read the same measures, so "fill rate" cannot mean two things.
+- **Personas are service principals, not groups.** This workspace has no account-level groups; a customer tenancy maps
+  account groups from the directory.
+- **Not yet production-grade:** backtesting across multiple origins rather than one holdout; p90 coverage on trend items
+  (74% vs 90%); real planner decisions instead of 25 seeded ones; per-user scoping in the app (on-behalf-of authorization);
+  a production WSGI server for the app.
 
-`src/config.py` is the single source of truth for every catalog, schema, table,
-warehouse, cluster and endpoint name. Nothing under `notebooks/`, `src/` or
-`tools/` hardcodes one.
+## 8. What is synthetic
 
-## What is synthetic
+**All of it.** Every byte comes from `src/datagen/generate.py` at seed `20260408`. No real, customer, scraped or third-party
+data is in this repository. The generator simulates demand, offshore replenishment, reactive air freight and end-of-life
+clearance, and injects deliberate faults (late weeks, duplicate keys, null on-hand, negatives, orphan SKUs, one retailer
+reporting in cases), so the expectations have real violations to catch. The baseline **emerges from those mechanics**; it was
+not dialled in.
 
-**All of it.** Every byte of data comes from `src/datagen/generate.py` at fixed
-seed `20260408`. No real, customer, scraped or third-party data appears
-anywhere in this repository.
+Labels used throughout: brands `Snugglewick`, `Glowberry Pets` (plush) and `Titan Squad` (licensed figures); licence families
+`EVERGREEN`, `FILM_TIE_IN`, `SOCIAL_TREND`; accounts `MASS_A`, `MASS_B`, `ETAIL_C`; DCs `DC_EAST`, `DC_CENTRAL`, `DC_WEST`,
+`DC_SOUTH`.
 
-The generator simulates consumer demand, an offshore replenishment policy, a
-reactive air-freight path and end-of-life clearance, and it injects deliberate
-messiness — late-arriving weeks, duplicate grain keys, null on-hand, negative
-quantities, orphan SKU references, and one retailer reporting in cases rather
-than eaches — so the Stage A expectations have genuine violations to catch.
+## 9. Repository layout
 
-The baseline **emerges from those mechanics**; it was not dialled in to a
-target. Getting it to emerge realistically meant finding and fixing several
-modelling errors that each produced an implausible business — an order-up-to
-target that covered 6 weeks against a 9–16 week lead time, launches that began
-with no pre-build, a seeded on-hand position with an empty inbound pipeline,
-and a spike-peak buy sized to 17 weeks of peak demand. The commit history
-records each one.
-
-Synthetic labels used consistently throughout: brands `Snugglewick` and
-`Glowberry Pets` (plush) and `Titan Squad` (licensed figures); licence families
-`EVERGREEN`, `FILM_TIE_IN`, `SOCIAL_TREND`; retailers `MASS_A`, `MASS_B`,
-`ETAIL_C`; DCs `DC_EAST`, `DC_CENTRAL`, `DC_WEST`, `DC_SOUTH`.
-
-The business is described generically, by industry. It has no company name, no
-revenue claim and no founding story.
-
-## Production path and limitations
-
-- **Ingest.** In production this reads from Microsoft SQL Server through
-  **Lakeflow Connect**, landing CDC output into Bronze with the same
-  expectations and the same Gold contract downstream. This build ingests
-  committed synthetic flat files from a UC volume via Auto Loader instead. **No
-  SQL Server connector was run here**; the substitution is deliberate.
-- **Semantic layer.** The metric views are the governed KPI definitions. This
-  is the layer the customer maintains in dbt today, and it is the natural
-  integration point — Genie, the app and any external BI tool read the same
-  measures, so `fill rate` cannot mean two things in two places.
-- **Governance personas are service principals, not groups.** Unity Catalog
-  resolves only account-level principals, and this FEVM workspace has no
-  account-level auth, so workspace-local groups are invisible to `GRANT`. In a
-  customer tenancy these would be account groups mapped from the corporate
-  directory.
-- **What production needs beyond this build:** real POS and EDI feeds, genuine
-  backtesting rigour across multiple origin dates rather than a single
-  time-respecting holdout, and human-in-the-loop evaluation on real planner
-  decisions rather than synthetic expectations.
-
-## Build status
-
-Honest accounting, because a submission that overclaims is worse than one that
-is short:
-
-**Built, executed, evidenced** — Stages A, B, C1 and C2, as indexed above. The
-pipeline ran to `COMPLETED`, the expectations produced real counts, the policies
-were verified by authenticating as each persona, the baseline was measured from
-the Gold layer, the sweep registered a champion and a challenger in Unity
-Catalog, and the agent is deployed to a Model Serving endpoint that answers
-real requests.
-
-**Two capabilities substituted, both documented, neither skipped:**
-
-- **MLflow prompt registry** is disabled at organisation level on this workspace
-  (`FEATURE_DISABLED: CreatePrompt`) on both the Unity Catalog and workspace
-  registry paths. Implemented instead as a governed, content-addressed,
-  version-addressable prompt store in Unity Catalog
-  (`src/agent/prompt_store.py`). The agent tries MLflow first and records on
-  every trace which path answered. Verbatim errors are in
-  `evidence/04_genai_agent.md`.
-- **Lakeflow Connect from SQL Server** is the production ingest path and is
-  stated as such; this build ingests committed synthetic flat files via Auto
-  Loader instead. No SQL Server connector was run.
-
-**Not built** — Stages E (Genie) and F (the app), and the business deck. Nothing
-for them is faked or half-written: no empty modules, no unexecuted notebooks,
-no asserted results. `src/genie/` and `src/serving/`, `app/` and
-`tests/` are empty directories.
-
-`docs/PROVENANCE.md` records the conversation ID, every resource this build
-created, and confirmation that nothing on the workspace's do-not-touch list was
-read or modified.
-
-## Repository layout
-
-```
-├── README.md                      # this file
-├── docs/PROVENANCE.md             # conversation ID, resources created, what was not touched
-├── notebooks/
-│   ├── 01_generate_data.{py,ipynb}            # .ipynb committed WITH outputs
-│   ├── 02_governance_and_baseline.{py,ipynb}
-│   └── exports/*.md                           # markdown export of each notebook
+```text
+├── README.md                     this file: outcome first
+├── docs/
+│   ├── BUSINESS_CASE.md          generated value model
+│   ├── PROVENANCE.md             conversation ids, resources created, what was not touched
+│   ├── HANDOFF.md  SCOPE_V2.md  RUBRIC_AUDIT.md
+├── notebooks/                    01 data · 02 governance + baseline · 03 forecast · 03a AutoML · 04 agent (.ipynb WITH outputs, + exports/*.md)
 ├── src/
-│   ├── config.py                  # single source of truth for all names
-│   ├── datagen/generate.py        # the seeded generator
-│   ├── pipelines/{bronze,silver,gold}.py      # the declarative pipeline
-│   └── governance/{apply,verify_policies}.py  # Stage B DDL and its proof
-├── tools/
-│   ├── dbx_notebook.py            # executes notebooks on a cluster, captures real outputs
-│   ├── dbsql.py                   # SQL helper rendering text tables for evidence
-│   ├── validate_baseline.py       # local cross-check of the KPI baseline
-│   └── evidence_0{1,2}_*.py       # evidence generators
-├── evidence/
-│   ├── 01_lakeflow.md  02_unity_catalog.md
-│   └── metrics/kpi_baseline.csv
-├── .env.example  .gitignore  pyproject.toml  LICENSE
+│   ├── config.py                 every name, in one place
+│   ├── datagen/                  the seeded generator
+│   ├── pipelines/                bronze, silver, gold (Lakeflow declarative)
+│   ├── governance/               grants, tags, row filter, column mask, metric views, and their proof
+│   ├── forecasting/  serving/    the forecaster pyfunc and its real-time deployment
+│   ├── agent/                    ResponsesAgent, tools, allocator, prompt store
+│   ├── lakebase/                 provisioning, projections, synced tables, write-back
+│   └── genie/                    space definition, questions, scoring
+├── app/                          the Databricks App (Dash): app, backend, ui, narrative, art, deploy
+├── tests/                        unit tests, backend smoke test, deployed-app HTTP smoke test
+├── tools/                        evidence generators, value model, notebook runner, workspace publisher
+└── evidence/                     one file per stage, metrics/ (CSV, JSON, logs), screens/ (bonus only)
 ```
 
-## Licence
-
-MIT — see [LICENSE](LICENSE).
+MIT licence — see [LICENSE](LICENSE).

@@ -1,0 +1,10 @@
+persona,kpi,baseline,modelled,per_year_synthetic,at_500m,basis
+sponsor,Margin recovered (share of revenue),—,+2.0 pts of revenue,$669K,$9.89M,"sum of the four levers, mid case"
+sponsor,Markdown on excess,$2.65M / yr,$2.38M / yr (−10%),$265K,$3.91M,markdown capture rate
+sponsor,Air-freight expedites,"361,829 units, $706K / yr","253,280 units (−30%)",$181K,$2.68M,units moved to ocean; only the premium is saved
+sponsor,"Revenue at risk, next 13 weeks",not visible today,"$1.38M, 434 critical positions, ranked",—,—,"the app, today"
+owner,Stockout-weeks,"24,930 / yr","19,944 / yr (−20%)",—,—,assumed to fall in proportion to lost sales
+owner,Sales lost to stockouts (revenue),$1.84M / yr,$1.47M / yr (−20%),$367K revenue ($139K margin),$5.42M revenue,lost-sales capture rate
+owner,OTIF,86.1%,88.9% (+2.8 pts),—,—,late or short lines avoided at the chargeback capture rate
+owner,Compliance chargebacks,$420K / yr,$336K / yr (−20%),$84K,$1.24M,chargeback capture rate
+owner,Critical positions with a recorded decision,6% (24 of 434),"every critical position, each override with a reason",—,—,the decision loop in the app
